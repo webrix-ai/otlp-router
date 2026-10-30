@@ -87,8 +87,8 @@ export const AGENTS: AgentDef[] = [
   },
   {
     slug: "otel-sdk",
-    name: "Agent SDKs",
-    vendor: "OpenAI Agents SDK, Claude Agent SDK, LangChain and any OTel SDK",
+    name: "OpenTelemetry SDKs",
+    vendor: "Claude Agent SDK, or your own agents instrumented with OpenTelemetry",
     signals: ["traces", "metrics", "logs"],
     where: "The agent process environment",
     language: "bash",
@@ -110,9 +110,7 @@ export const KNOWN_AGENT_SLUGS = [
   "codex",
   "gemini-cli",
   "qwen-code",
-  "github-copilot",
-  "cursor",
-  "pi"
+  "github-copilot"
 ]
 
 const NAMES: Record<string, string> = {
@@ -122,8 +120,6 @@ const NAMES: Record<string, string> = {
   "gemini-cli": "Gemini CLI",
   "qwen-code": "Qwen Code",
   "github-copilot": "GitHub Copilot",
-  cursor: "Cursor",
-  pi: "Pi",
   unknown: "Unknown"
 }
 

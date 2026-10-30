@@ -24,7 +24,7 @@ func TestExampleConfigLoads(t *testing.T) {
 	}
 }
 
-func TestEmptyIngestTokenMeansOpen(t *testing.T) {
+func TestUnsetIngestTokenIsDropped(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "c.yaml")
 	raw := "auth:\n  admin:\n    password: x\n  ingestTokens: [\"${env:UNSET_TOKENS}\"]\n"
 	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
@@ -43,6 +43,10 @@ func TestNormalizeTargets(t *testing.T) {
 	out, err := NormalizeTargets([]Target{
 		{Name: "Grafana Cloud", Type: TypeOTLPHTTP, Endpoint: "https://x"},
 		{Name: "W", Type: TypeWillow, Endpoint: "https://ignored", Willow: &WillowSettings{Org: " acme ", Token: "t"}},
+		{Name: "W EU", Type: TypeWillow, Willow: &WillowSettings{Org: "acme", Token: "t", Region: " EU "}},
+		{Name: "W onprem", Type: TypeWillow, Willow: &WillowSettings{Token: "t", Region: "custom", ConnectURL: " https://willow.acme.internal/otlp/v1/logs/ "}},
+		{Name: "W prefix", Type: TypeWillow, Willow: &WillowSettings{Token: "t", Region: "custom", ConnectURL: "http://10.0.0.5:3000/willow"}},
+		{Name: "W switched", Type: TypeWillow, Willow: &WillowSettings{Org: "acme", Token: "t", Region: "us", ConnectURL: "https://stale"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -51,8 +55,19 @@ func TestNormalizeTargets(t *testing.T) {
 		t.Fatalf("defaults not applied: %+v", out[0])
 	}
 	w := out[1]
-	if w.Endpoint != "" || w.ResolvedEndpoint() != "https://acme.withwillow.ai/otlp" || w.Encoding != "json" {
+	if w.Endpoint != "" || w.ResolvedEndpoint() != "https://acme.withwillow.ai/otlp" || w.Encoding != "json" || w.Willow.Region != "us" {
 		t.Fatalf("willow target: %+v -> %s", w, w.ResolvedEndpoint())
+	}
+	if eu := out[2]; eu.ResolvedEndpoint() != "https://acme.eu.withwillow.ai/otlp" || eu.Willow.Region != "eu" {
+		t.Fatalf("willow eu target: %+v -> %s", eu.Willow, eu.ResolvedEndpoint())
+	}
+	for i, want := range map[int]string{3: "https://willow.acme.internal/otlp", 4: "http://10.0.0.5:3000/willow/otlp", 5: "https://acme.withwillow.ai/otlp"} {
+		if got := out[i].ResolvedEndpoint(); got != want {
+			t.Errorf("%s: got %s, want %s", out[i].Name, got, want)
+		}
+	}
+	if out[5].Willow.ConnectURL != "" {
+		t.Error("a hosted region must not keep a stale connectUrl")
 	}
 
 	bad := [][]Target{
@@ -60,6 +75,11 @@ func TestNormalizeTargets(t *testing.T) {
 		{{Name: "a", Type: "kafka", Endpoint: "x"}},
 		{{Name: "a", Type: TypeOTLPHTTP}},
 		{{Name: "a", Type: TypeWillow, Willow: &WillowSettings{Org: "acme"}}},
+		{{Name: "a", Type: TypeWillow, Willow: &WillowSettings{Org: "acme", Token: "t", Region: "apac"}}},
+		{{Name: "a", Type: TypeWillow, Willow: &WillowSettings{Token: "t"}}},
+		{{Name: "a", Type: TypeWillow, Willow: &WillowSettings{Token: "t", Region: "custom"}}},
+		{{Name: "a", Type: TypeWillow, Willow: &WillowSettings{Token: "t", Region: "custom", ConnectURL: "willow.acme.internal"}}},
+		{{Name: "a", Type: TypeWillow, Willow: &WillowSettings{Token: "t", Region: "custom", ConnectURL: "https://u:p@willow.acme.internal"}}},
 		{{Name: "a", Type: TypeOTLPHTTP, Endpoint: "x"}, {Name: "A", Type: TypeOTLPHTTP, Endpoint: "y"}},
 	}
 	for i, ts := range bad {

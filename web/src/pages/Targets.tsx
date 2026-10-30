@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { ArrowRight, Filter, Pencil, Plus } from "lucide-react"
-import { api, formatNumber, timeAgo, SIGNALS, type Target } from "../api"
+import { api, formatNumber, timeAgo, SIGNALS, willowEndpoint, type Target } from "../api"
 import { agentName } from "../agents"
 import { useRouterData } from "../App"
 import { ErrorBanner, PageHeader, StatusDot, Toggle } from "../ui"
@@ -81,7 +81,7 @@ export default function Targets() {
                       </span>
                     </div>
                     <div className="mt-1 truncate font-mono text-xs text-faint">
-                      {t.type === "willow" ? t.willow?.baseUrl || `${t.willow?.org}.withwillow.ai` : t.endpoint}
+                      {t.type === "willow" ? willowEndpoint(t.willow).replace(/^https:\/\//, "") : t.endpoint}
                     </div>
                   </div>
                   <Toggle checked={t.enabled} disabled={readOnly} onChange={(v) => toggle(t, v)} label={`Enable ${t.name}`} />

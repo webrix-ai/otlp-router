@@ -5,6 +5,7 @@ auth:
     username: admin
     password: "${env:OTLP_ROUTER_ADMIN_PASSWORD}"
   sessionSecret: local-dev-only
+  ingestTokens: [dev-token]
 store:
   type: memory
 targets:

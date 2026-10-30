@@ -139,6 +139,56 @@ func TestReadOnlyAndJSONOnly(t *testing.T) {
 	}
 }
 
+func TestTokenAPI(t *testing.T) {
+	c := setup(t, false)
+	c.do("POST", "/api/login", map[string]string{"username": "admin", "password": "pw"})
+
+	rec, body := c.do("POST", "/api/tokens", map[string]string{"name": "Laptops"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	secret, _ := body["secret"].(string)
+	id, _ := body["created"].(map[string]any)["id"].(string)
+	if secret == "" || id == "" || !c.rt.AuthorizeIngest(secret) {
+		t.Fatalf("create response: %s", rec.Body)
+	}
+
+	rec, _ = c.do("GET", "/api/tokens", nil)
+	if strings.Contains(rec.Body.String(), secret) || strings.Contains(rec.Body.String(), "hash") {
+		t.Fatalf("listing must not expose the token or its hash: %s", rec.Body)
+	}
+
+	rec, body = c.do("POST", "/api/tokens/"+id+"/rotate", map[string]any{"graceSeconds": 0})
+	if rec.Code != http.StatusOK || c.rt.AuthorizeIngest(secret) || !c.rt.AuthorizeIngest(body["secret"].(string)) {
+		t.Fatalf("rotate: %d %s", rec.Code, rec.Body)
+	}
+	if rec, _ := c.do("POST", "/api/tokens/"+id+"/rotate", map[string]any{"graceSeconds": 0}); rec.Code != http.StatusNotFound {
+		t.Fatalf("rotating a replaced token: want 404, got %d", rec.Code)
+	}
+	if rec, _ := c.do("POST", "/api/tokens/x/rotate", map[string]any{"graceSeconds": 999999999}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("grace too long: want 400, got %d", rec.Code)
+	}
+
+	newID := body["created"].(map[string]any)["id"].(string)
+	if rec, _ := c.do("DELETE", "/api/tokens/"+newID, map[string]any{}); rec.Code != http.StatusOK {
+		t.Fatalf("revoke: %d", rec.Code)
+	}
+
+	// Token changes bump the shared version; target edits must use the new one.
+	_, targets := c.do("GET", "/api/targets", nil)
+	if rec, _ := c.do("POST", "/api/targets/vendor/enabled", map[string]any{"enabled": false, "version": targets["version"]}); rec.Code != http.StatusOK {
+		t.Fatalf("target edit after token change: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestTokensReadOnly(t *testing.T) {
+	c := setup(t, true)
+	c.do("POST", "/api/login", map[string]string{"username": "admin", "password": "pw"})
+	if rec, _ := c.do("POST", "/api/tokens", map[string]string{"name": "x"}); rec.Code != http.StatusForbidden {
+		t.Fatalf("read-only: want 403, got %d", rec.Code)
+	}
+}
+
 func TestSPAFallback(t *testing.T) {
 	c := setup(t, false)
 	rec, _ := c.do("GET", "/targets", nil)

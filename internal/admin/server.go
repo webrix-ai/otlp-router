@@ -63,6 +63,10 @@ func Handler(o Options) (http.Handler, error) {
 	mux.Handle("PUT /api/targets/{id}", s.mutating(s.updateTarget))
 	mux.Handle("DELETE /api/targets/{id}", s.mutating(s.deleteTarget))
 	mux.Handle("POST /api/targets/{id}/enabled", s.mutating(s.setEnabled))
+	mux.Handle("GET /api/tokens", s.authed(s.listTokens))
+	mux.Handle("POST /api/tokens", s.mutating(s.createToken))
+	mux.Handle("POST /api/tokens/{id}/rotate", s.mutating(s.rotateToken))
+	mux.Handle("DELETE /api/tokens/{id}", s.mutating(s.revokeToken))
 	mux.Handle("POST /api/test", s.authed(s.testTarget))
 	mux.Handle("POST /api/preview", s.authed(s.preview))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) { writeError(w, http.StatusNotFound, "not found") })
@@ -100,7 +104,7 @@ func (s *server) mutating(fn http.HandlerFunc) http.Handler {
 			return
 		}
 		if s.Config.ReadOnly {
-			writeError(w, http.StatusForbidden, "the router is in read-only mode; change targets in its config")
+			writeError(w, http.StatusForbidden, "the router is in read-only mode; change targets and tokens in its config")
 			return
 		}
 		fn(w, r)
@@ -142,7 +146,7 @@ func (s *server) info(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"version":    s.Version,
 		"publicUrl":  s.Config.PublicURL,
-		"ingestAuth": len(s.Config.Auth.IngestTokens) > 0,
+		"ingestAuth": !s.Config.Auth.AllowUnauthenticatedIngest,
 		"readOnly":   s.Config.ReadOnly,
 		"store":      s.Store.Kind(),
 		"listen":     s.Config.Listen,

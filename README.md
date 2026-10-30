@@ -28,7 +28,9 @@ destination must not see.
   tokens, drop spans or metrics by name, and choose which agents a target receives.
 - **A web UI.** Turn targets on and off, edit filters, and preview exactly what a target will receive using the latest
   real payload. Protected by an admin login set in the config.
-- **Agent aware.** Recognises Claude Code, Codex, Gemini CLI, Copilot, Cursor and others from `service.name`, and
+- **Ingest tokens.** Agents authenticate with bearer tokens you create, rotate and revoke in the UI. Only hashes are
+  stored.
+- **Agent aware.** Recognises Claude Code, Codex, Gemini CLI, Qwen Code and GitHub Copilot from `service.name`, and
   gives copy-paste setup for each.
 - **Kubernetes first.** A Helm chart; targets edited in the UI are stored in a ConfigMap shared by all replicas.
 
@@ -36,8 +38,7 @@ destination must not see.
 
 ```bash
 helm install otlp-router oci://ghcr.io/webrix-ai/charts/otlp-router \
-  --namespace observability --create-namespace \
-  --set 'auth.ingestTokens={change-me}'
+  --namespace observability --create-namespace
 ```
 
 Open the UI and sign in as `admin`:
@@ -47,13 +48,18 @@ kubectl -n observability port-forward svc/otlp-router 8080
 kubectl -n observability get secret otlp-router -o jsonpath='{.data.admin-password}' | base64 -d; echo
 ```
 
+Then create an ingest token on the **Tokens** page. Until one exists, the router rejects all telemetry.
+
 To send to Willow as well:
 
 ```bash
 helm upgrade --install otlp-router oci://ghcr.io/webrix-ai/charts/otlp-router -n observability \
-  --set 'auth.ingestTokens={change-me}' \
   --set willow.enabled=true --set willow.org=acme --set willow.token="$WILLOW_OTLP_TOKEN"
 ```
+
+If your Willow org is in the EU region (`acme.eu.withwillow.ai`), add `--set willow.region=eu`. For on-prem Willow or
+a custom domain, use `--set willow.region=custom --set willow.connectUrl=https://willow.acme.internal` instead of
+`willow.org`.
 
 Everything the chart accepts is documented in [`charts/otlp-router/values.yaml`](charts/otlp-router/values.yaml).
 
@@ -70,7 +76,8 @@ Use [`config.example.yaml`](config.example.yaml) as a starting point; it uses th
 
 ## Connect your agents
 
-The UI's **Agents** page shows these with your ingress URL filled in.
+The UI's **Agents** page shows these with your ingress URL filled in, and with the token you just created. Replace
+`change-me` below with an ingest token.
 
 **Claude Code** (shell profile, or the `env` block of `managed-settings.json`):
 
@@ -96,8 +103,28 @@ exporter = { otlp-http = { endpoint = "https://otel.acme.internal/v1/logs", prot
 { "telemetry": { "enabled": true, "target": "local", "otlpEndpoint": "https://otel.acme.internal", "otlpProtocol": "http" } }
 ```
 
-**Anything else** that uses an OpenTelemetry SDK (OpenAI Agents SDK, Claude Agent SDK, LangChain, your own agents)
-reads the standard `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS` variables.
+**Anything else** that exports with an OpenTelemetry SDK (the Claude Agent SDK, your own agents) reads the standard
+`OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS` variables.
+
+Only agents with their own official OpenTelemetry export are listed here.
+
+## Ingest tokens
+
+Agents send `Authorization: Bearer <token>`, over HTTP or as gRPC metadata. Manage tokens on the UI's **Tokens** page:
+
+- **Create.** Name a token after the agents that use it, such as "Engineering laptops" or "CI". The token (`otr_…`) is
+  shown once. The router stores only its SHA-256 hash, in the same store as the targets, so every replica accepts it
+  within seconds.
+- **Rotate.** Issues a new token with the same name. The old one keeps working for the grace period you pick (none,
+  1 hour, 24 hours or 7 days) while you roll the new one out, then stops.
+- **Revoke.** Stops a token immediately.
+
+The page shows when each token was last used (as seen by the replica serving the page), and `/metrics` counts rejected requests in
+`otlp_router_ingest_unauthorized_total`, so you can see when the old token has gone quiet.
+
+Tokens in `auth.ingestTokens` (Helm: `auth.ingestTokens` or the `ingest-tokens` key of `auth.existingSecret`) are
+accepted as well, for setups that keep tokens in a secret manager. Rotate those in the config. `readOnly: true` turns
+off token changes in the UI too.
 
 ## Targets and filters
 
@@ -130,8 +157,8 @@ the UI are stored as typed and shown masked.
 
 ## Configuration
 
-The config file (Helm renders it for you) holds what the operator owns: listeners, the admin login, ingest tokens, the
-store, and the targets to seed on first start. See [`config.example.yaml`](config.example.yaml).
+The config file (Helm renders it for you) holds what the operator owns: listeners, the admin login, any ingest tokens
+managed outside the UI, the store, and the targets to seed on first start. See [`config.example.yaml`](config.example.yaml).
 
 | Store       | Use                                                                                   |
 | ----------- | ------------------------------------------------------------------------------------- |
@@ -139,14 +166,15 @@ store, and the targets to seed on first start. See [`config.example.yaml`](confi
 | `file`      | Docker or a VM, with a volume.                                                        |
 | `memory`    | Development. Targets reset on restart.                                                |
 
-Set `readOnly: true` to manage targets only through config (GitOps). The UI then shows them but cannot change them.
+Set `readOnly: true` to manage targets and tokens only through config (GitOps). The UI then shows them but cannot
+change them.
 
 ## Security
 
 - The UI and API need the admin login. Sessions are HTTP-only, `SameSite=Strict` cookies signed with
   `auth.sessionSecret`; failed logins are rate limited.
-- Ingest requires a bearer token when `auth.ingestTokens` is set. Set it: without one, anyone who can reach the
-  OTLP ports can send telemetry through your router.
+- Ingest always requires a token unless `auth.allowUnauthenticatedIngest` is on. With no tokens, everything is
+  rejected rather than accepted, so revoking the last token never opens the router up.
 - Expose the UI only on an internal network. The chart has separate ingresses for OTLP and the UI.
 - The router keeps the last few payloads per signal in memory for the filter preview. They can contain prompts, are
   shown only to the admin, and are never written to disk.
@@ -158,7 +186,7 @@ Set `readOnly: true` to manage targets only through config (GitOps). The UI then
 make ui        # build the UI into web/dist (embedded in the binary)
 make run       # router on :4317/:4318/:8080, log in with admin / admin
 make dev       # UI with hot reload on :5173
-make sample    # send sample Claude Code, Codex and Gemini CLI telemetry
+make sample    # send sample Claude Code, Codex and Gemini CLI telemetry, with ingest token dev-token
 make test lint chart-lint
 ```
 

@@ -12,8 +12,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"github.com/webrix-ai/otlp-router/internal/config"
 )
 
 const (
@@ -111,31 +109,31 @@ func (c *ConfigMap) do(ctx context.Context, method, url string, body any) (*http
 	return res, out, err
 }
 
-func (c *ConfigMap) Load(ctx context.Context) ([]config.Target, string, bool, error) {
+func (c *ConfigMap) Load(ctx context.Context) (State, string, bool, error) {
 	res, body, err := c.do(ctx, http.MethodGet, c.url(true), nil)
 	if err != nil {
-		return nil, "", false, err
+		return State{}, "", false, err
 	}
 	if res.StatusCode == http.StatusNotFound {
-		return nil, "", false, nil
+		return State{}, "", false, nil
 	}
 	if res.StatusCode != http.StatusOK {
-		return nil, "", false, fmt.Errorf("get configmap: HTTP %d: %s", res.StatusCode, body)
+		return State{}, "", false, fmt.Errorf("get configmap: HTTP %d: %s", res.StatusCode, body)
 	}
 	var cm cmObject
 	if err := json.Unmarshal(body, &cm); err != nil {
-		return nil, "", false, err
+		return State{}, "", false, err
 	}
 	raw, ok := cm.Data[configKey]
 	if !ok {
-		return nil, cm.Metadata.ResourceVersion, false, nil
+		return State{}, cm.Metadata.ResourceVersion, false, nil
 	}
-	targets, err := decode([]byte(raw))
-	return targets, cm.Metadata.ResourceVersion, true, err
+	state, err := decode([]byte(raw))
+	return state, cm.Metadata.ResourceVersion, true, err
 }
 
-func (c *ConfigMap) Save(ctx context.Context, targets []config.Target, version string) (string, error) {
-	raw, err := encode(targets)
+func (c *ConfigMap) Save(ctx context.Context, state State, version string) (string, error) {
+	raw, err := encode(state)
 	if err != nil {
 		return "", err
 	}

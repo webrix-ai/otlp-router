@@ -24,6 +24,10 @@ func (s *server) metrics(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprintf(&b, "otlp_router_received_batches_total{signal=%q} %d\n", sig, ingest.Batches[sig])
 	}
 
+	b.WriteString("# HELP otlp_router_ingest_unauthorized_total Export requests rejected for a missing, unknown or expired token.\n")
+	b.WriteString("# TYPE otlp_router_ingest_unauthorized_total counter\n")
+	fmt.Fprintf(&b, "otlp_router_ingest_unauthorized_total %d\n", s.Router.IngestAuth().Rejected)
+
 	targets := s.Router.TargetStats()
 	ids := make([]string, 0, len(targets))
 	for id := range targets {

@@ -61,6 +61,7 @@ func run(configPath string, log *slog.Logger) error {
 	defer stop()
 
 	rt := router.New(st, log)
+	rt.SetIngestAuth(cfg.Auth.IngestTokens, cfg.Auth.AllowUnauthenticatedIngest)
 	if err := rt.Init(ctx, cfg.Targets); err != nil {
 		return fmt.Errorf("load targets: %w", err)
 	}
@@ -72,9 +73,11 @@ func run(configPath string, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	in := &ingest.Server{Router: rt, Tokens: cfg.Auth.IngestTokens, Log: log}
-	if len(cfg.Auth.IngestTokens) == 0 {
+	in := &ingest.Server{Router: rt, Authorize: rt.AuthorizeIngest, Log: log}
+	if cfg.Auth.AllowUnauthenticatedIngest {
 		log.Warn("ingest auth is disabled; anyone who can reach the OTLP ports can send telemetry")
+	} else if len(cfg.Auth.IngestTokens) == 0 && len(rt.IngestAuth().Tokens) == 0 {
+		log.Warn("no ingest tokens yet; telemetry is rejected until you create one in the UI")
 	}
 	if cfg.Auth.SessionSecret == "" {
 		log.Warn("auth.sessionSecret is unset; UI sessions end on restart and are not shared between replicas")

@@ -36,7 +36,33 @@ export interface Target {
   signals: Record<Signal, boolean>
   agents?: string[]
   filters?: Rule[]
-  willow?: { org: string; token: string; baseUrl?: string }
+  willow?: WillowSettings
+}
+
+export type WillowRegion = "us" | "eu" | "custom"
+
+export interface WillowSettings {
+  org?: string
+  token: string
+  region?: WillowRegion
+  connectUrl?: string
+  baseUrl?: string
+}
+
+export const WILLOW_REGIONS: { value: WillowRegion; label: string; apex?: string }[] = [
+  { value: "us", label: "US", apex: "withwillow.ai" },
+  { value: "eu", label: "EU", apex: "eu.withwillow.ai" },
+  { value: "custom", label: "Custom (on-prem)" }
+]
+
+export function willowEndpoint(w?: WillowSettings): string {
+  if (w?.baseUrl) return w.baseUrl.replace(/\/+$/, "")
+  if (w?.region === "custom") {
+    const base = (w.connectUrl ?? "").trim().replace(/(\/otlp(\/v1(\/(traces|metrics|logs))?)?)?\/*$/, "")
+    return `${base || "<connect-url>"}/otlp`
+  }
+  const region = WILLOW_REGIONS.find((r) => r.value === w?.region && r.apex) ?? WILLOW_REGIONS[0]
+  return `https://${w?.org || "<org>"}.${region.apex}/otlp`
 }
 
 export interface TargetStats {
@@ -90,6 +116,28 @@ export interface TargetsResponse {
   version: string
 }
 
+export interface IngestToken {
+  id: string
+  name: string
+  hint: string
+  createdAt: number
+  expiresAt?: number
+  lastUsedAt?: number
+}
+
+export interface TokensResponse {
+  tokens: IngestToken[]
+  configTokens: number
+  open: boolean
+  rejected: number
+  version: string
+}
+
+export interface TokenCreatedResponse extends TokensResponse {
+  created: IngestToken
+  secret: string
+}
+
 export interface PreviewResponse {
   available: boolean
   before?: unknown
@@ -138,6 +186,11 @@ export const api = {
     request<TargetsResponse>("DELETE", `/api/targets/${encodeURIComponent(id)}`, { version }),
   setEnabled: (id: string, enabled: boolean, version: string) =>
     request<TargetsResponse>("POST", `/api/targets/${encodeURIComponent(id)}/enabled`, { enabled, version }),
+  tokens: () => request<TokensResponse>("GET", "/api/tokens"),
+  createToken: (name: string) => request<TokenCreatedResponse>("POST", "/api/tokens", { name }),
+  rotateToken: (id: string, graceSeconds: number) =>
+    request<TokenCreatedResponse>("POST", `/api/tokens/${encodeURIComponent(id)}/rotate`, { graceSeconds }),
+  revokeToken: (id: string) => request<TokensResponse>("DELETE", `/api/tokens/${encodeURIComponent(id)}`, {}),
   test: (target: Target) => request<{ ok: boolean; error?: string }>("POST", "/api/test", { target }),
   preview: (target: Target, signal: Signal) =>
     request<PreviewResponse>("POST", "/api/preview", { target, signal })
@@ -148,6 +201,14 @@ export function formatNumber(n: number | undefined): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 10_000) return `${(n / 1_000).toFixed(1)}k`
   return n.toLocaleString()
+}
+
+export function timeUntil(ms: number): string {
+  const s = Math.max(0, Math.round((ms - Date.now()) / 1000))
+  if (s < 60) return `${s}s`
+  if (s < 3600) return `${Math.round(s / 60)}m`
+  if (s < 86400) return `${Math.round(s / 3600)}h`
+  return `${Math.round(s / 86400)}d`
 }
 
 export function timeAgo(ms?: number): string {

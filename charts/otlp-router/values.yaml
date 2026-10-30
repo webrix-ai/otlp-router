@@ -20,9 +20,12 @@ auth:
     # Leave empty to generate a random password, kept across upgrades. Read it
     # with the command printed after install.
     password: ""
-  # Tokens agents must send as "Authorization: Bearer <token>". Empty means
-  # ingest is open to anyone who can reach the service.
+  # Agents send "Authorization: Bearer <token>". Create, rotate and revoke
+  # tokens in the UI (Tokens page). Tokens listed here are accepted as well,
+  # for setups that manage them as secrets; rotate those by changing them here.
   ingestTokens: []
+  # Accept telemetry without any token. Leave off outside local testing.
+  allowUnauthenticatedIngest: false
   # Use an existing Secret instead of the generated one. Keys:
   # admin-password (required), session-secret (required), ingest-tokens
   # (optional, comma-separated), willow-token (optional).
@@ -36,6 +39,13 @@ readOnly: false
 willow:
   enabled: false
   org: ""
+  # Where your Willow org lives: us ({org}.withwillow.ai), eu
+  # ({org}.eu.withwillow.ai), or custom for on-prem or a custom domain, set in
+  # connectUrl.
+  region: us
+  # Your Willow connect URL when region is custom, e.g.
+  # https://willow.acme.internal. org is not needed then.
+  connectUrl: ""
   # Your org's Willow OTLP token. Ignored when auth.existingSecret is set
   # (put it under willow-token there).
   token: ""

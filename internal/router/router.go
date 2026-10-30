@@ -32,6 +32,7 @@ type Router struct {
 	version   string
 	exporters map[string]*exporter.Exporter
 
+	auth    ingestAuth
 	ingest  ingestStats
 	samples samples
 }
@@ -41,52 +42,65 @@ func New(st store.Store, log *slog.Logger) *Router {
 		store:     st,
 		log:       log,
 		exporters: map[string]*exporter.Exporter{},
+		auth:      ingestAuth{byHash: map[string]config.IngestToken{}},
 		ingest:    ingestStats{agents: map[string]*AgentStats{}},
 		samples:   samples{bySignal: map[telemetry.Signal][]telemetry.Payload{}},
 	}
 }
 
-// Init loads the stored targets, seeding the store from the config file's
+// Init loads the stored state, seeding the store from the config file's
 // targets on first start, and keeps watching the store for changes.
 func (r *Router) Init(ctx context.Context, seed []config.Target) error {
-	targets, version, found, err := r.store.Load(ctx)
+	state, version, found, err := r.store.Load(ctx)
 	if err != nil {
 		return err
 	}
 	if !found {
-		if targets, err = config.NormalizeTargets(seed); err != nil {
+		if state.Targets, err = config.NormalizeTargets(seed); err != nil {
 			return err
 		}
-		version, err = r.store.Save(ctx, targets, version)
+		version, err = r.store.Save(ctx, state, version)
 		switch {
 		case errors.Is(err, store.ErrConflict):
 			// Another replica seeded first; use what it stored.
-			if targets, version, _, err = r.store.Load(ctx); err != nil {
+			if state, version, _, err = r.store.Load(ctx); err != nil {
 				return err
 			}
 		case err != nil:
 			return err
 		default:
-			r.log.Info("seeded targets from config", "store", r.store.Kind(), "targets", len(targets))
+			r.log.Info("seeded targets from config", "store", r.store.Kind(), "targets", len(state.Targets))
 		}
 	}
-	r.apply(targets, version)
-	go store.Watch(ctx, r.store, version, r.log, func(t []config.Target, v string) {
-		r.log.Info("targets changed in store", "version", v)
-		r.apply(t, v)
+	r.apply(state, version)
+	go store.Watch(ctx, r.store, version, r.log, func(s store.State, v string) {
+		r.log.Info("settings changed in store", "version", v)
+		r.apply(s, v)
 	})
 	return nil
 }
 
-// apply swaps in exporters for added or changed targets and retires the rest.
-func (r *Router) apply(in []config.Target, version string) {
-	targets, err := config.NormalizeTargets(in)
+// reload applies the store's current state, used after a save conflicts.
+func (r *Router) reload(ctx context.Context) error {
+	state, version, found, err := r.store.Load(ctx)
+	if err != nil || !found {
+		return err
+	}
+	r.apply(state, version)
+	return nil
+}
+
+// apply swaps in exporters for added or changed targets, retires the rest and
+// loads the ingest tokens.
+func (r *Router) apply(s store.State, version string) {
+	targets, err := config.NormalizeTargets(s.Targets)
 	if err != nil {
 		r.log.Error("ignoring invalid stored targets", "err", err)
 		return
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.auth.set(s.IngestTokens)
 	next := make(map[string]*exporter.Exporter, len(targets))
 	var retired []*exporter.Exporter
 	for _, t := range targets {
@@ -140,26 +154,35 @@ func (r *Router) Targets() ([]config.Target, string) {
 	return append([]config.Target{}, r.targets...), r.version
 }
 
+func (r *Router) state() (store.State, string) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return store.State{
+		Targets:      append([]config.Target{}, r.targets...),
+		IngestTokens: r.auth.list(),
+	}, r.version
+}
+
 // Update saves the list produced by mutate, guarded by the caller's version,
 // and applies it.
 func (r *Router) Update(ctx context.Context, version string, mutate func([]config.Target) ([]config.Target, error)) ([]config.Target, string, error) {
-	current, currentVersion := r.Targets()
+	state, currentVersion := r.state()
 	if version != "" && version != currentVersion {
 		return nil, "", store.ErrConflict
 	}
-	next, err := mutate(current)
+	next, err := mutate(state.Targets)
 	if err != nil {
 		return nil, "", err
 	}
-	if next, err = config.NormalizeTargets(next); err != nil {
+	if state.Targets, err = config.NormalizeTargets(next); err != nil {
 		return nil, "", err
 	}
-	newVersion, err := r.store.Save(ctx, next, currentVersion)
+	newVersion, err := r.store.Save(ctx, state, currentVersion)
 	if err != nil {
 		return nil, "", err
 	}
-	r.apply(next, newVersion)
-	return next, newVersion, nil
+	r.apply(state, newVersion)
+	return state.Targets, newVersion, nil
 }
 
 func (r *Router) TargetStats() map[string]exporter.Snapshot {

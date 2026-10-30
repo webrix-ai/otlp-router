@@ -1,4 +1,5 @@
-// Package store persists the target list the UI edits.
+// Package store persists what the UI edits: the target list and the ingest
+// tokens.
 package store
 
 import (
@@ -14,34 +15,34 @@ import (
 )
 
 // ErrConflict means another replica or user saved since the caller's version.
-var ErrConflict = errors.New("targets were changed elsewhere; reload and try again")
+var ErrConflict = errors.New("the router's settings were changed elsewhere; reload and try again")
 
 const pollInterval = 5 * time.Second
 
+// State is everything the store holds, saved and versioned as one document.
+type State struct {
+	Targets      []config.Target      `yaml:"targets"`
+	IngestTokens []config.IngestToken `yaml:"ingestTokens,omitempty"`
+}
+
 type Store interface {
-	// Load returns the stored targets and their version. found is false when
+	// Load returns the stored state and its version. found is false when
 	// nothing has been stored yet.
-	Load(ctx context.Context) (targets []config.Target, version string, found bool, err error)
-	// Save writes targets if the stored version still equals version ("" for
+	Load(ctx context.Context) (state State, version string, found bool, err error)
+	// Save writes state if the stored version still equals version ("" for
 	// a first write) and returns the new version.
-	Save(ctx context.Context, targets []config.Target, version string) (string, error)
+	Save(ctx context.Context, state State, version string) (string, error)
 	Kind() string
 }
 
-type document struct {
-	Targets []config.Target `yaml:"targets"`
+func encode(s State) ([]byte, error) {
+	return yaml.Marshal(s)
 }
 
-func encode(targets []config.Target) ([]byte, error) {
-	return yaml.Marshal(document{Targets: targets})
-}
-
-func decode(raw []byte) ([]config.Target, error) {
-	var doc document
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		return nil, err
-	}
-	return doc.Targets, nil
+func decode(raw []byte) (State, error) {
+	var s State
+	err := yaml.Unmarshal(raw, &s)
+	return s, err
 }
 
 func New(cfg config.Store) (Store, error) {
@@ -58,7 +59,7 @@ func New(cfg config.Store) (Store, error) {
 
 // Watch polls s and calls onChange whenever the stored version changes, so
 // edits made through another replica are picked up.
-func Watch(ctx context.Context, s Store, since string, log *slog.Logger, onChange func([]config.Target, string)) {
+func Watch(ctx context.Context, s Store, since string, log *slog.Logger, onChange func(State, string)) {
 	t := time.NewTicker(pollInterval)
 	defer t.Stop()
 	last := since
@@ -68,7 +69,7 @@ func Watch(ctx context.Context, s Store, since string, log *slog.Logger, onChang
 			return
 		case <-t.C:
 		}
-		targets, version, found, err := s.Load(ctx)
+		state, version, found, err := s.Load(ctx)
 		if err != nil {
 			log.Warn("store poll failed", "store", s.Kind(), "err", err)
 			continue
@@ -77,6 +78,6 @@ func Watch(ctx context.Context, s Store, since string, log *slog.Logger, onChang
 			continue
 		}
 		last = version
-		onChange(targets, version)
+		onChange(state, version)
 	}
 }

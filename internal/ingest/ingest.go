@@ -5,7 +5,6 @@ package ingest
 import (
 	"compress/gzip"
 	"context"
-	"crypto/subtle"
 	"errors"
 	"fmt"
 	"io"
@@ -34,26 +33,20 @@ type Router interface {
 
 type Server struct {
 	Router Router
-	// Tokens accepted as bearer tokens. Empty disables ingest auth.
-	Tokens []string
-	Log    *slog.Logger
+	// Authorize checks the bearer token an agent sent. Nil accepts everything.
+	Authorize func(token string) bool
+	Log       *slog.Logger
 }
 
 func (s *Server) authorized(header string) bool {
-	if len(s.Tokens) == 0 {
+	if s.Authorize == nil {
 		return true
 	}
 	token, ok := strings.CutPrefix(header, "Bearer ")
 	if !ok {
 		token = header
 	}
-	token = strings.TrimSpace(token)
-	for _, t := range s.Tokens {
-		if subtle.ConstantTimeCompare([]byte(token), []byte(t)) == 1 {
-			return true
-		}
-	}
-	return false
+	return s.Authorize(strings.TrimSpace(token))
 }
 
 // passthrough keeps the inbound x-* headers targets may forward, e.g.

@@ -8,11 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-
-	"github.com/webrix-ai/otlp-router/internal/config"
 )
 
-// File stores targets in a YAML file, versioned by content hash.
+// File stores state in a YAML file, versioned by content hash.
 type File struct {
 	Path string
 	mu   sync.Mutex
@@ -20,19 +18,19 @@ type File struct {
 
 func (f *File) Kind() string { return "file" }
 
-func (f *File) Load(_ context.Context) ([]config.Target, string, bool, error) {
+func (f *File) Load(_ context.Context) (State, string, bool, error) {
 	raw, err := os.ReadFile(f.Path)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, "", false, nil
+		return State{}, "", false, nil
 	}
 	if err != nil {
-		return nil, "", false, err
+		return State{}, "", false, err
 	}
-	targets, err := decode(raw)
-	return targets, hash(raw), true, err
+	state, err := decode(raw)
+	return state, hash(raw), true, err
 }
 
-func (f *File) Save(ctx context.Context, targets []config.Target, version string) (string, error) {
+func (f *File) Save(ctx context.Context, state State, version string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	_, current, _, err := f.Load(ctx)
@@ -42,7 +40,7 @@ func (f *File) Save(ctx context.Context, targets []config.Target, version string
 	if current != version {
 		return "", ErrConflict
 	}
-	raw, err := encode(targets)
+	raw, err := encode(state)
 	if err != nil {
 		return "", err
 	}
@@ -64,7 +62,7 @@ func hash(b []byte) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-// Memory keeps targets in process; they reset on restart.
+// Memory keeps state in process; it resets on restart.
 type Memory struct {
 	mu      sync.Mutex
 	raw     []byte
@@ -73,23 +71,23 @@ type Memory struct {
 
 func (m *Memory) Kind() string { return "memory" }
 
-func (m *Memory) Load(_ context.Context) ([]config.Target, string, bool, error) {
+func (m *Memory) Load(_ context.Context) (State, string, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.raw == nil {
-		return nil, "", false, nil
+		return State{}, "", false, nil
 	}
-	targets, err := decode(m.raw)
-	return targets, m.version, true, err
+	state, err := decode(m.raw)
+	return state, m.version, true, err
 }
 
-func (m *Memory) Save(_ context.Context, targets []config.Target, version string) (string, error) {
+func (m *Memory) Save(_ context.Context, state State, version string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if version != m.version {
 		return "", ErrConflict
 	}
-	raw, err := encode(targets)
+	raw, err := encode(state)
 	if err != nil {
 		return "", err
 	}

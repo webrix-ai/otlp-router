@@ -17,6 +17,7 @@ data:
         password: "${env:OTLP_ROUTER_ADMIN_PASSWORD}"
       sessionSecret: "${env:OTLP_ROUTER_SESSION_SECRET}"
       ingestTokens: ["${env:OTLP_ROUTER_INGEST_TOKENS}"]
+      allowUnauthenticatedIngest: {{ .Values.auth.allowUnauthenticatedIngest }}
     readOnly: {{ .Values.readOnly }}
     store:
       type: configmap
@@ -25,8 +26,9 @@ data:
     targets:
       {{- include "otlp-router.targets" . | nindent 6 }}
 ---
-# Holds the target list the UI edits. The router writes the data; Helm only
-# creates the object and never overwrites it, so UI changes survive upgrades.
+# Holds the targets and ingest token hashes the UI edits. The router writes
+# the data; Helm only creates the object and never overwrites it, so UI changes
+# survive upgrades.
 apiVersion: v1
 kind: ConfigMap
 metadata:

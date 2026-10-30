@@ -47,8 +47,17 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- define "otlp-router.targets" -}}
 {{- $targets := list }}
 {{- if .Values.willow.enabled }}
+{{- $region := .Values.willow.region | default "us" }}
+{{- if not (has $region (list "us" "eu" "custom")) }}{{ fail "willow.region must be us, eu or custom" }}{{ end }}
+{{- $w := dict "region" $region "token" "${env:WILLOW_OTLP_TOKEN}" }}
+{{- if eq $region "custom" }}
+{{- if not .Values.willow.connectUrl }}{{ fail "willow.connectUrl is required when willow.region is custom" }}{{ end }}
+{{- $_ := set $w "connectUrl" .Values.willow.connectUrl }}
+{{- else }}
 {{- if not .Values.willow.org }}{{ fail "willow.org is required when willow.enabled is true" }}{{ end }}
-{{- $targets = append $targets (dict "name" "Willow" "type" "willow" "enabled" true "willow" (dict "org" .Values.willow.org "token" "${env:WILLOW_OTLP_TOKEN}") "filters" .Values.willow.filters) }}
+{{- $_ := set $w "org" .Values.willow.org }}
+{{- end }}
+{{- $targets = append $targets (dict "name" "Willow" "type" "willow" "enabled" true "willow" $w "filters" .Values.willow.filters) }}
 {{- end }}
 {{- range .Values.targets }}
 {{- $targets = append $targets . }}

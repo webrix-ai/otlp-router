@@ -1,12 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
-import { Activity, BookOpen, LogOut, Radio, Settings as SettingsIcon, Waypoints } from "lucide-react"
+import { Activity, BookOpen, KeyRound, LogOut, Radio, Settings as SettingsIcon, Waypoints } from "lucide-react"
 import { api, type Info, type Stats, type Target, type TargetsResponse } from "./api"
 import { Brand, GITHUB_URL, GithubIcon, WILLOW_URL } from "./ui"
 import Login from "./pages/Login"
 import Overview from "./pages/Overview"
 import Targets from "./pages/Targets"
 import Sources from "./pages/Sources"
+import Tokens from "./pages/Tokens"
 import Settings from "./pages/Settings"
+
+/** A token created in this browser session. Kept in memory only, so the agent snippets can use it. */
+export interface FreshToken {
+  name: string
+  secret: string
+}
 
 interface RouterData {
   info?: Info
@@ -16,6 +23,8 @@ interface RouterData {
   username: string
   applyTargets: (r: TargetsResponse) => void
   reloadTargets: () => Promise<void>
+  freshToken?: FreshToken
+  setFreshToken: (t?: FreshToken) => void
 }
 
 const DataContext = createContext<RouterData | null>(null)
@@ -30,6 +39,7 @@ const PAGES = [
   { id: "overview", label: "Overview", icon: Activity },
   { id: "targets", label: "Targets", icon: Waypoints },
   { id: "sources", label: "Agents", icon: Radio },
+  { id: "tokens", label: "Tokens", icon: KeyRound },
   { id: "settings", label: "Settings", icon: SettingsIcon }
 ] as const
 
@@ -75,6 +85,7 @@ function DataProvider({ username, children }: { username: string; children: Reac
   const [info, setInfo] = useState<Info>()
   const [targets, setTargets] = useState<TargetsResponse>({ targets: [], version: "" })
   const [stats, setStats] = useState<Stats>()
+  const [freshToken, setFreshToken] = useState<FreshToken>()
 
   const reloadTargets = useCallback(async () => setTargets(await api.targets()), [])
 
@@ -110,7 +121,9 @@ function DataProvider({ username, children }: { username: string; children: Reac
         stats,
         username,
         applyTargets: setTargets,
-        reloadTargets
+        reloadTargets,
+        freshToken,
+        setFreshToken
       }}
     >
       {children}
@@ -174,12 +187,13 @@ function Shell({ onLogout }: { onLogout: () => void }) {
         <main className="mx-auto w-full max-w-6xl flex-1 px-10 py-10">
           {info?.readOnly && (
             <div className="mb-6 rounded-lg border border-warn/30 bg-warn/10 px-4 py-2.5 text-sm text-warn">
-              Read-only mode. Targets are managed in the router's config, not in this UI.
+              Read-only mode. Targets and tokens are managed in the router's config, not in this UI.
             </div>
           )}
           {page === "overview" && <Overview />}
           {page === "targets" && <Targets />}
           {page === "sources" && <Sources />}
+          {page === "tokens" && <Tokens />}
           {page === "settings" && <Settings />}
         </main>
         <footer className="flex items-center justify-between border-t border-line px-10 py-4 text-xs text-faint">

@@ -1,8 +1,8 @@
 # OTLP Router configuration.
 #
 # Operator-owned settings live here. The target list below only seeds the
-# store on first start; after that, targets are edited in the UI and kept in
-# the store (unless readOnly is true).
+# store on first start; after that, targets and ingest tokens are edited in
+# the UI and kept in the store (unless readOnly is true).
 #
 # ${env:NAME} is replaced with the environment variable NAME. Use it for every
 # secret so nothing sensitive is written to this file or to the store.
@@ -25,10 +25,14 @@ auth:
     # passwordHash: "$2a$10$..."
   # Signs UI sessions. Set the same value on every replica.
   sessionSecret: "${env:OTLP_ROUTER_SESSION_SECRET}"
-  # Agents send "Authorization: Bearer <token>". Comma-separated values from
-  # one variable are split. Leave empty to accept unauthenticated ingest.
+  # Agents send "Authorization: Bearer <token>". Create and rotate tokens in
+  # the UI's Tokens page; tokens listed here are accepted too, for setups
+  # that manage them as secrets. Comma-separated values from one variable are
+  # split.
   ingestTokens:
     - "${env:OTLP_ROUTER_INGEST_TOKENS}"
+  # Accept telemetry without a token. Leave off outside local testing.
+  allowUnauthenticatedIngest: false
 
 # When true the UI can view targets but not change them, for GitOps setups.
 readOnly: false
@@ -47,6 +51,8 @@ targets:
     enabled: true
     willow:
       org: acme
+      region: us   # us, eu (acme.eu.withwillow.ai), or custom with connectUrl
+      # connectUrl: https://willow.acme.internal   # on-prem or custom domain
       token: "${env:WILLOW_OTLP_TOKEN}"
     filters:
       - type: drop_log_events
