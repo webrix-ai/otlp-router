@@ -1,0 +1,80 @@
+# OTLP Router configuration.
+#
+# Operator-owned settings live here. The target list below only seeds the
+# store on first start; after that, targets are edited in the UI and kept in
+# the store (unless readOnly is true).
+#
+# ${env:NAME} is replaced with the environment variable NAME. Use it for every
+# secret so nothing sensitive is written to this file or to the store.
+
+listen:
+  otlpGrpc: ":4317"
+  otlpHttp: ":4318"
+  admin: ":8080"
+
+# The address agents use to reach the OTLP/HTTP listener. Shown in the UI's
+# setup snippets.
+publicUrl: "https://otel.acme.internal"
+
+auth:
+  admin:
+    username: admin
+    # Plain password from the environment, or a bcrypt hash from
+    # `otlp-router hash-password`.
+    password: "${env:OTLP_ROUTER_ADMIN_PASSWORD}"
+    # passwordHash: "$2a$10$..."
+  # Signs UI sessions. Set the same value on every replica.
+  sessionSecret: "${env:OTLP_ROUTER_SESSION_SECRET}"
+  # Agents send "Authorization: Bearer <token>". Comma-separated values from
+  # one variable are split. Leave empty to accept unauthenticated ingest.
+  ingestTokens:
+    - "${env:OTLP_ROUTER_INGEST_TOKENS}"
+
+# When true the UI can view targets but not change them, for GitOps setups.
+readOnly: false
+
+store:
+  # memory | file | configmap
+  type: file
+  path: /data/targets.yaml
+  # configMap:
+  #   name: otlp-router-targets
+  #   namespace: observability   # defaults to the pod's namespace
+
+targets:
+  - name: Willow
+    type: willow
+    enabled: true
+    willow:
+      org: acme
+      token: "${env:WILLOW_OTLP_TOKEN}"
+    filters:
+      - type: drop_log_events
+        names: ["*user_prompt"]
+      - type: redact
+        builtins: true
+
+  - name: Analytics warehouse
+    type: otlphttp
+    enabled: false
+    endpoint: https://otel-ingest.acme.internal
+    filters:
+      - type: hash_attributes
+        keys: [user.email]
+        salt: "${env:HASH_SALT}"
+
+  - name: Datadog
+    type: otlphttp
+    enabled: false
+    endpoint: https://otlp.datadoghq.com
+    encoding: proto
+    compression: gzip
+    headers:
+      dd-api-key: "${env:DD_API_KEY}"
+    signals: { traces: true, metrics: true, logs: false }
+
+  - name: In-cluster collector
+    type: otlpgrpc
+    enabled: false
+    endpoint: http://otel-collector.observability:4317
+    agents: [claude-code, codex]

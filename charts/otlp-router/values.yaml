@@ -1,0 +1,124 @@
+image:
+  repository: ghcr.io/webrix-ai/otlp-router
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 2
+
+# Address agents use to reach the OTLP/HTTP ingress, shown in the UI's setup
+# snippets, e.g. https://otel.acme.internal
+publicUrl: ""
+
+auth:
+  admin:
+    username: admin
+    # Leave empty to generate a random password, kept across upgrades. Read it
+    # with the command printed after install.
+    password: ""
+  # Tokens agents must send as "Authorization: Bearer <token>". Empty means
+  # ingest is open to anyone who can reach the service.
+  ingestTokens: []
+  # Use an existing Secret instead of the generated one. Keys:
+  # admin-password (required), session-secret (required), ingest-tokens
+  # (optional, comma-separated), willow-token (optional).
+  existingSecret: ""
+
+# When true the UI shows targets but cannot change them. Manage targets in
+# `targets` below instead (GitOps).
+readOnly: false
+
+# Built-in Willow target. Adds a target seeded with the privacy preset.
+willow:
+  enabled: false
+  org: ""
+  # Your org's Willow OTLP token. Ignored when auth.existingSecret is set
+  # (put it under willow-token there).
+  token: ""
+  # Filters for the Willow target. Defaults to dropping prompt events and
+  # redacting secrets. User identity is kept because Willow attributes usage
+  # to users and teams by email; hash it here if you want anonymous analytics.
+  filters:
+    - type: drop_log_events
+      names: ["*user_prompt", "*.user_prompt", "gen_ai.user.message"]
+    - type: redact
+      builtins: true
+
+# Targets to seed on first start. After that the list is edited in the UI and
+# stored in the <release>-targets ConfigMap, so changing this has no effect
+# unless readOnly is true or the ConfigMap is deleted. Use ${env:NAME} for
+# secrets and provide NAME through `env` or `envFrom`.
+targets: []
+#  - name: Datadog
+#    type: otlphttp
+#    enabled: true
+#    endpoint: https://otlp.datadoghq.com
+#    headers:
+#      dd-api-key: "${env:DD_API_KEY}"
+
+env: []
+#  - name: DD_API_KEY
+#    valueFrom:
+#      secretKeyRef: { name: datadog, key: api-key }
+envFrom: []
+
+service:
+  type: ClusterIP
+  annotations: {}
+  otlpGrpcPort: 4317
+  otlpHttpPort: 4318
+  adminPort: 8080
+
+ingress:
+  # OTLP/HTTP ingress for agents outside the cluster.
+  otlp:
+    enabled: false
+    className: ""
+    annotations: {}
+    host: otel.example.com
+    tls: []
+  # Admin UI. Keep it on an internal ingress class where you can.
+  admin:
+    enabled: false
+    className: ""
+    annotations: {}
+    host: otel-admin.example.com
+    tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  labels: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []

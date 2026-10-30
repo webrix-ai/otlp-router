@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+/* Willow brand palette, dark-first. */
+@theme {
+  --color-ink: #07100c;
+  --color-canvas: #0b1611;
+  --color-surface: #102019;
+  --color-raised: #152a21;
+  --color-line: #21392e;
+  --color-line-strong: #2e4d3f;
+  --color-fg: #e6e8df;
+  --color-muted: #93a69a;
+  --color-faint: #5f7468;
+  --color-lime: #c5ff59;
+  --color-lime-soft: #9be270;
+  --color-mint: #4abb85;
+  --color-teal: #26a695;
+  --color-forest: #2e6041;
+  --color-sage: #a1a37c;
+  --color-danger: #ff7a6b;
+  --color-warn: #f2c94c;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-canvas text-fg font-sans antialiased;
+  background-image:
+    radial-gradient(1200px 600px at 85% -10%, rgb(197 255 89 / 0.06), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgb(74 187 133 / 0.07), transparent 60%);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgb(197 255 89 / 0.3);
+}
+
+@utility card {
+  @apply rounded-2xl border border-line bg-surface/80 backdrop-blur-sm;
+}
+
+@utility input {
+  @apply w-full rounded-lg border border-line bg-ink/60 px-3 py-2 text-sm text-fg placeholder:text-faint outline-none transition focus:border-lime/60 focus:ring-2 focus:ring-lime/15;
+}
+
+@utility label {
+  @apply mb-1.5 block text-xs font-medium tracking-wide text-muted uppercase;
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@utility btn-primary {
+  @apply btn bg-lime text-ink hover:bg-lime-soft;
+}
+
+@utility btn-ghost {
+  @apply btn border border-line text-fg hover:border-line-strong hover:bg-raised;
+}
+
+@utility btn-danger {
+  @apply btn border border-danger/40 text-danger hover:bg-danger/10;
+}
+
+@utility chip {
+  @apply inline-flex items-center gap-1 rounded-full border border-line bg-raised px-2.5 py-0.5 text-xs text-muted;
+}
+
+@utility code {
+  @apply rounded-xl border border-line bg-ink/80 p-4 font-mono text-xs leading-relaxed text-fg/90;
+}

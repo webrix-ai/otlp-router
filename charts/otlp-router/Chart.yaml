@@ -1,0 +1,14 @@
+apiVersion: v2
+name: otlp-router
+description: Open source OTLP router for AI agents, by Willow. One ingress, many targets, per-target filtering, with a web UI.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/webrix-ai/otlp-router
+icon: https://raw.githubusercontent.com/webrix-ai/otlp-router/main/web/public/willow-logo-green.svg
+keywords: [opentelemetry, otlp, ai-agents, claude-code, codex, observability, willow]
+maintainers:
+  - name: Willow
+    url: https://withwillow.ai
+sources:
+  - https://github.com/webrix-ai/otlp-router

@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - run: go vet ./...
+      - run: go test -race ./...
+
+  ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: helm lint charts/otlp-router
+      - run: helm template t charts/otlp-router --set willow.enabled=true --set willow.org=acme --set ingress.otlp.enabled=true --set ingress.admin.enabled=true --set autoscaling.enabled=true --set serviceMonitor.enabled=true > /dev/null
+
+  e2e:
+    needs: [go, ui, chart]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@v4
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: otlp-router
+      - name: Build and load image
+        run: |
+          docker build -t ghcr.io/webrix-ai/otlp-router:e2e .
+          kind load docker-image ghcr.io/webrix-ai/otlp-router:e2e --name otlp-router
+      - name: Install a sink and a router that forwards to it
+        run: |
+          helm install sink charts/otlp-router -n otel --create-namespace --set image.tag=e2e --set replicaCount=1 --set podDisruptionBudget.enabled=false
+          helm install router charts/otlp-router -n otel --set image.tag=e2e \
+            --set 'auth.ingestTokens={e2e-token}' \
+            --set 'targets[0].name=sink' --set 'targets[0].type=otlpgrpc' --set 'targets[0].enabled=true' \
+            --set 'targets[0].endpoint=http://sink-otlp-router.otel.svc:4317'
+          kubectl -n otel rollout status deploy/router-otlp-router --timeout=180s
+          kubectl -n otel rollout status deploy/sink-otlp-router --timeout=180s
+      - name: Send telemetry and check the sink received it
+        run: |
+          kubectl -n otel port-forward svc/router-otlp-router 14317:4317 14318:4318 &
+          kubectl -n otel port-forward svc/sink-otlp-router 28080:8080 &
+          sleep 3
+          go run ./hack/send-sample -http http://localhost:14318 -grpc localhost:14317 -token e2e-token
+          sleep 5
+          PW=$(kubectl -n otel get secret sink-otlp-router -o jsonpath='{.data.admin-password}' | base64 -d)
+          curl -sf -c jar -H 'Content-Type: application/json' -d "{\"username\":\"admin\",\"password\":\"$PW\"}" localhost:28080/api/login
+          curl -sf -b jar localhost:28080/api/stats | tee stats.json
+          python3 -c 'import json; d=json.load(open("stats.json"))["ingest"]["items"]; assert d["logs"] == 6 and d["metrics"] == 2 and d["traces"] == 1, d'

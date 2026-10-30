@@ -1,0 +1,14 @@
+# Local development config for `make run`.
+publicUrl: "http://localhost:4318"
+auth:
+  admin:
+    username: admin
+    password: "${env:OTLP_ROUTER_ADMIN_PASSWORD}"
+  sessionSecret: local-dev-only
+store:
+  type: memory
+targets:
+  - name: Debug sink
+    type: otlphttp
+    enabled: false
+    endpoint: http://localhost:9999

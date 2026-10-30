@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "otlp-router.fullname" . }}
+  labels:
+    {{- include "otlp-router.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    listen:
+      otlpGrpc: ":4317"
+      otlpHttp: ":4318"
+      admin: ":8080"
+    publicUrl: {{ .Values.publicUrl | quote }}
+    auth:
+      admin:
+        username: {{ .Values.auth.admin.username | quote }}
+        password: "${env:OTLP_ROUTER_ADMIN_PASSWORD}"
+      sessionSecret: "${env:OTLP_ROUTER_SESSION_SECRET}"
+      ingestTokens: ["${env:OTLP_ROUTER_INGEST_TOKENS}"]
+    readOnly: {{ .Values.readOnly }}
+    store:
+      type: configmap
+      configMap:
+        name: {{ include "otlp-router.targetsConfigMap" . }}
+    targets:
+      {{- include "otlp-router.targets" . | nindent 6 }}
+---
+# Holds the target list the UI edits. The router writes the data; Helm only
+# creates the object and never overwrites it, so UI changes survive upgrades.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "otlp-router.targetsConfigMap" . }}
+  labels:
+    {{- include "otlp-router.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
