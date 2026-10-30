@@ -10,10 +10,10 @@ export function ingestURL(publicUrl?: string): string {
 }
 
 export default function Sources() {
-  const { info, stats } = useRouterData()
+  const { info, stats, freshToken } = useRouterData()
   const [selected, setSelected] = useState(AGENTS[0].slug)
   const url = ingestURL(info?.publicUrl)
-  const token = info?.ingestAuth ? "<ingest-token>" : ""
+  const token = info?.ingestAuth ? (freshToken?.secret ?? "<ingest-token>") : ""
   const seen = new Set((stats?.ingest.agents ?? []).map((a) => a.agent))
   const agent = AGENTS.find((a) => a.slug === selected)!
   const snippet = agent.snippet(url, token)
@@ -36,6 +36,18 @@ export default function Sources() {
             {info?.ingestAuth ? "Bearer token required" : "Open: anyone on the network can send"}
           </span>
         </div>
+        {info?.ingestAuth && (
+          <div>
+            <div className="label">Token in snippets</div>
+            {freshToken ? (
+              <span className="text-fg">{freshToken.name}</span>
+            ) : (
+              <a href="#/tokens" className="text-lime hover:underline">
+                Create a token to fill it in
+              </a>
+            )}
+          </div>
+        )}
         {!info?.publicUrl && (
           <p className="text-xs text-faint">Set publicUrl in the config to show your ingress address here.</p>
         )}

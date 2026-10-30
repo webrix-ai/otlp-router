@@ -1,6 +1,19 @@
 import { useState, type ReactNode } from "react"
 import { ArrowDown, ArrowUp, Eye, Plug, Plus, Sparkles, Trash2, Wand2 } from "lucide-react"
-import { api, SECRET_MASK, SIGNALS, type PreviewResponse, type Rule, type RuleType, type Signal, type Target, type TargetType } from "../api"
+import {
+  api,
+  SECRET_MASK,
+  SIGNALS,
+  WILLOW_REGIONS,
+  willowEndpoint,
+  type PreviewResponse,
+  type Rule,
+  type RuleType,
+  type Signal,
+  type Target,
+  type TargetType,
+  type WillowRegion,
+} from "../api"
 import { KNOWN_AGENT_SLUGS, agentName } from "../agents"
 import { useRouterData } from "../App"
 import { ErrorBanner, Modal, Toggle } from "../ui"
@@ -15,7 +28,7 @@ export function newTarget(type: TargetType): Target {
     headers: {},
     filters: []
   }
-  if (type === "willow") return { ...base, name: "Willow", willow: { org: "", token: "" } }
+  if (type === "willow") return { ...base, name: "Willow", willow: { org: "", token: "", region: "us" } }
   if (type === "otlpgrpc") return { ...base, endpoint: "" }
   return { ...base, endpoint: "", encoding: "proto", compression: "gzip" }
 }
@@ -165,31 +178,56 @@ export default function TargetEditor({ initial, onClose }: { initial: Target; on
             </Field>
             {t.type === "willow" ? (
               <>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Willow org">
-                    <input
+                <div className="grid grid-cols-[1fr_11rem] gap-3">
+                  {t.willow?.region === "custom" ? (
+                    <Field label="Connect URL">
+                      <input
+                        className="input font-mono"
+                        value={t.willow?.connectUrl ?? ""}
+                        placeholder="https://willow.acme.internal"
+                        onChange={(e) => patch({ willow: { ...t.willow!, connectUrl: e.target.value } })}
+                      />
+                    </Field>
+                  ) : (
+                    <Field label="Willow org">
+                      <input
+                        className="input"
+                        value={t.willow?.org ?? ""}
+                        placeholder="acme"
+                        onChange={(e) => patch({ willow: { ...t.willow!, org: e.target.value } })}
+                      />
+                    </Field>
+                  )}
+                  <Field label="Region">
+                    <select
                       className="input"
-                      value={t.willow?.org ?? ""}
-                      placeholder="acme"
-                      onChange={(e) => patch({ willow: { ...t.willow!, org: e.target.value } })}
-                    />
-                  </Field>
-                  <Field label="OTLP token">
-                    <input
-                      className="input font-mono"
-                      value={t.willow?.token ?? ""}
-                      placeholder="${env:WILLOW_TOKEN}"
-                      onFocus={(e) => e.target.value === SECRET_MASK && e.target.select()}
-                      onChange={(e) => patch({ willow: { ...t.willow!, token: e.target.value } })}
-                    />
+                      value={t.willow?.region || "us"}
+                      onChange={(e) => patch({ willow: { ...t.willow!, region: e.target.value as WillowRegion } })}
+                    >
+                      {WILLOW_REGIONS.map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
                   </Field>
                 </div>
+                <Field label="OTLP token">
+                  <input
+                    className="input font-mono"
+                    value={t.willow?.token ?? ""}
+                    placeholder="${env:WILLOW_TOKEN}"
+                    onFocus={(e) => e.target.value === SECRET_MASK && e.target.select()}
+                    onChange={(e) => patch({ willow: { ...t.willow!, token: e.target.value } })}
+                  />
+                </Field>
                 <p className="text-xs text-faint">
                   Sends to{" "}
                   <span className="font-mono text-muted">
-                    {t.willow?.baseUrl || `https://${t.willow?.org || "<org>"}.withwillow.ai/otlp`}
+                    {willowEndpoint(t.willow)}
                   </span>{" "}
                   as OTLP/JSON, authenticated with your org's Willow OTLP token.
+                  {t.willow?.region === "custom" && " Use the URL your users open Willow's portal at, on-prem or on a custom domain."}
                 </p>
               </>
             ) : (

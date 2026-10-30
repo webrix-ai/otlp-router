@@ -28,7 +28,7 @@ dev:
 	cd web && npm run dev
 
 sample:
-	go run ./hack/send-sample -n 10
+	go run ./hack/send-sample -n 10 -token dev-token
 
 docker:
 	docker build --build-arg VERSION=$(VERSION) -t $(IMAGE):$(VERSION) .

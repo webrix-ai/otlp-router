@@ -17,7 +17,12 @@ Open the UI:
 
 Sign in as "{{ .Values.auth.admin.username }}". Password:
   kubectl -n {{ .Release.Namespace }} get secret {{ include "otlp-router.secretName" . }} -o jsonpath='{.data.admin-password}' | base64 -d; echo
-{{- if not .Values.auth.ingestTokens }}
+{{- if .Values.auth.allowUnauthenticatedIngest }}
 
-WARNING: auth.ingestTokens is empty, so anyone who can reach the OTLP ports can send telemetry.
+WARNING: auth.allowUnauthenticatedIngest is on, so anyone who can reach the OTLP ports can send telemetry.
+{{- else if not .Values.auth.ingestTokens }}
+
+Next: open the UI's Tokens page and create an ingest token. Until one exists,
+the router rejects all telemetry. The Agents page then shows setup snippets
+with the token filled in.
 {{- end }}

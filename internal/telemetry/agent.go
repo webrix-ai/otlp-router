@@ -12,8 +12,9 @@ import (
 // Unknown is the agent slug for telemetry with no recognizable identity.
 const Unknown = "unknown"
 
-// agentAliases folds the service.name values each AI agent reports onto one
-// slug. Kept in step with Willow's ingest so both sides name agents the same.
+// agentAliases folds the service.name values each AI agent's official
+// OpenTelemetry export reports onto one slug, named the same as Willow's
+// ingest. Only agents that export OTLP themselves belong here.
 var agentAliases = map[string]string{
 	"claude-code":        "claude-code",
 	"claudecode":         "claude-code",
@@ -29,11 +30,6 @@ var agentAliases = map[string]string{
 	"gemini-cli":         "gemini-cli",
 	"gemini-code-assist": "gemini-cli",
 	"qwen-code":          "qwen-code",
-	"cursor":             "cursor",
-	"cursor-cli":         "cursor",
-	"cursor-agent":       "cursor",
-	"pi":                 "pi",
-	"pi-coding-agent":    "pi",
 	"github-copilot":     "github-copilot",
 	"copilot":            "github-copilot",
 	"copilot-chat":       "github-copilot",

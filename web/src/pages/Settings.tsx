@@ -23,7 +23,15 @@ export default function Settings() {
         <Row label="Listeners" value={info && `gRPC ${info.listen.OTLPGRPC} · HTTP ${info.listen.OTLPHTTP} · UI ${info.listen.Admin}`} />
         <Row
           label="Ingest auth"
-          value={info?.ingestAuth ? "Bearer token required" : <span className="text-warn">Disabled. Set auth.ingestTokens to require one.</span>}
+          value={
+            info?.ingestAuth ? (
+              <a href="#/tokens" className="hover:text-lime">
+                Bearer token required · manage tokens
+              </a>
+            ) : (
+              <span className="text-warn">Open. Turn off auth.allowUnauthenticatedIngest to require a token.</span>
+            )
+          }
         />
         <Row label="Target storage" value={info && (storeLabel[info.store] ?? info.store)} />
         <Row label="Target list version" value={<code className="font-mono text-xs">{version || "—"}</code>} />

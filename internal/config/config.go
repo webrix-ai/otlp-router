@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -35,8 +36,11 @@ type Auth struct {
 	// SessionSecret signs UI session cookies. Must be shared by all replicas.
 	SessionSecret string `yaml:"sessionSecret"`
 	// IngestTokens are accepted as "Authorization: Bearer <token>" on OTLP
-	// ingest. Empty means ingest is open.
+	// ingest, alongside the tokens created in the UI.
 	IngestTokens []string `yaml:"ingestTokens"`
+	// AllowUnauthenticatedIngest accepts telemetry without any token. Without
+	// it, ingest is rejected until a token exists.
+	AllowUnauthenticatedIngest bool `yaml:"allowUnauthenticatedIngest"`
 }
 
 type AdminUser struct {
@@ -112,10 +116,29 @@ func (s Signals) Has(signal string) bool {
 }
 
 type WillowSettings struct {
-	Org string `yaml:"org" json:"org"`
+	// Org is the org slug, used to build the hosted URL. Not needed for custom.
+	Org string `yaml:"org,omitempty" json:"org,omitempty"`
 	// Token is the org's OTLP token ("<org>:<signature>").
-	Token   string `yaml:"token" json:"token"`
+	Token string `yaml:"token" json:"token"`
+	// Region is where the org lives: us (default), eu, or custom for an
+	// on-prem or custom-domain Willow reached at ConnectURL.
+	Region string `yaml:"region,omitempty" json:"region,omitempty"`
+	// ConnectURL is the org's Willow connect URL, e.g.
+	// https://willow.acme.internal. Required when Region is custom.
+	ConnectURL string `yaml:"connectUrl,omitempty" json:"connectUrl,omitempty"`
+	// BaseURL overrides the OTLP base URL entirely, including the /otlp path.
 	BaseURL string `yaml:"baseUrl,omitempty" json:"baseUrl,omitempty"`
+}
+
+const (
+	WillowRegionUS     = "us"
+	WillowRegionEU     = "eu"
+	WillowRegionCustom = "custom"
+)
+
+var willowApex = map[string]string{
+	WillowRegionUS: "withwillow.ai",
+	WillowRegionEU: "eu.withwillow.ai",
 }
 
 // WillowDefaultPassthrough are the headers Willow uses to attribute telemetry.
@@ -242,11 +265,30 @@ func NormalizeTargets(in []Target) ([]Target, error) {
 			}
 		case TypeOTLPGRPC:
 		case TypeWillow:
-			if t.Willow == nil || strings.TrimSpace(t.Willow.Org) == "" || t.Willow.Token == "" {
-				return nil, fmt.Errorf("target %q: willow.org and willow.token are required", t.Name)
+			if t.Willow == nil || t.Willow.Token == "" {
+				return nil, fmt.Errorf("target %q: willow.token is required", t.Name)
 			}
 			w := *t.Willow
 			w.Org = strings.TrimSpace(w.Org)
+			w.Region = strings.ToLower(strings.TrimSpace(w.Region))
+			if w.Region == "" {
+				w.Region = WillowRegionUS
+			}
+			switch _, hosted := willowApex[w.Region]; {
+			case hosted:
+				w.ConnectURL = ""
+				if w.Org == "" && w.BaseURL == "" {
+					return nil, fmt.Errorf("target %q: willow.org is required", t.Name)
+				}
+			case w.Region == WillowRegionCustom:
+				u, err := normalizeConnectURL(w.ConnectURL)
+				if err != nil {
+					return nil, fmt.Errorf("target %q: willow.connectUrl: %w", t.Name, err)
+				}
+				w.ConnectURL = u
+			default:
+				return nil, fmt.Errorf("target %q: willow.region must be us, eu or custom", t.Name)
+			}
 			t.Willow = &w
 			t.Encoding = "json"
 			t.Endpoint = ""
@@ -270,6 +312,27 @@ func NormalizeTargets(in []Target) ([]Target, error) {
 	return out, nil
 }
 
+var otlpSuffix = regexp.MustCompile(`(/otlp(/v1(/(traces|metrics|logs))?)?)?/*$`)
+
+// normalizeConnectURL accepts the connect URL as an admin would copy it,
+// with or without a trailing /otlp or signal path.
+func normalizeConnectURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("required for the custom region, e.g. https://willow.acme.internal")
+	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		return "", fmt.Errorf("must be an http(s) URL such as https://willow.acme.internal")
+	}
+	if u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+		return "", fmt.Errorf("must not include credentials, a query or a fragment")
+	}
+	u.Path = otlpSuffix.ReplaceAllString(u.Path, "")
+	u.RawPath = ""
+	return u.String(), nil
+}
+
 // ResolvedEndpoint is where the exporter sends, derived for Willow targets.
 func (t Target) ResolvedEndpoint() string {
 	if t.Type == TypeWillow && t.Willow != nil {
@@ -282,5 +345,12 @@ func WillowEndpoint(w *WillowSettings) string {
 	if w.BaseURL != "" {
 		return strings.TrimRight(w.BaseURL, "/")
 	}
-	return fmt.Sprintf("https://%s.withwillow.ai/otlp", w.Org)
+	if w.Region == WillowRegionCustom {
+		return w.ConnectURL + "/otlp"
+	}
+	apex, ok := willowApex[w.Region]
+	if !ok {
+		apex = willowApex[WillowRegionUS]
+	}
+	return fmt.Sprintf("https://%s.%s/otlp", w.Org, apex)
 }
