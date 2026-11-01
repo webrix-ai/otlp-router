@@ -26,8 +26,12 @@ LABEL org.opencontainers.image.source="https://github.com/webrix-ai/otlp-router"
 COPY --from=build /out/otlp-router /otlp-router
 # Owned by the runtime user so a fresh named volume at /data is writable.
 COPY --from=build --chown=65532:65532 /out/data /data
+# Keeps targets and tokens on the /data volume unless a config file picks
+# another store.
+ENV OTLP_ROUTER_STORE=file \
+    OTLP_ROUTER_STORE_PATH=/data/targets.yaml
+VOLUME /data
 EXPOSE 4317 4318 8080
 # Numeric, so Kubernetes can verify runAsNonRoot.
 USER 65532:65532
 ENTRYPOINT ["/otlp-router"]
-CMD ["--config", "/etc/otlp-router/config.yaml"]

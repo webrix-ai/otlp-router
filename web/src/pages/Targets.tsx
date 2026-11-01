@@ -44,9 +44,9 @@ export default function Targets() {
       {loaded && !hasWillow && !readOnly && (
         <button
           onClick={() => setEditing(newTarget("willow"))}
-          className="group mb-6 flex w-full items-center gap-5 overflow-hidden rounded-2xl border border-lime/25 bg-gradient-to-r from-forest/50 via-surface to-surface p-5 text-left transition hover:border-lime/50"
+          className="group mb-6 flex w-full items-center gap-5 overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-r from-primary/15 via-surface to-surface p-5 text-left transition hover:border-primary/60"
         >
-          <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-lime/15">
+          <div className="grid size-12 shrink-0 place-items-center rounded-full bg-logo-bg">
             <img src="/willow-logo-green.svg" alt="" className="size-6" />
           </div>
           <div className="flex-1">
@@ -55,7 +55,7 @@ export default function Targets() {
               Adoption, cost and risk analytics across every agent, per team. Filter prompts and identities before they leave.
             </div>
           </div>
-          <span className="flex items-center gap-1 text-sm text-lime">
+          <span className="flex items-center gap-1 text-sm text-primary">
             Connect <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
           </span>
         </button>
@@ -76,7 +76,7 @@ export default function Targets() {
                       <StatusDot health={health} />
                       <span className="truncate font-medium">{t.name}</span>
                       <span className="chip">
-                        {t.type === "willow" && <img src="/willow-logo-green.svg" alt="" className="size-3" />}
+                        {t.type === "willow" && <img src="/willow-logo-green.svg" alt="" className="size-4 rounded-full bg-logo-bg p-0.5" />}
                         {TYPE_LABEL[t.type]}
                       </span>
                     </div>
@@ -89,19 +89,19 @@ export default function Targets() {
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {SIGNALS.map((sig) => (
-                    <span key={sig} className={`chip ${t.signals[sig] ? "border-mint/30 text-mint" : "line-through opacity-50"}`}>
+                    <span key={sig} className={`chip ${t.signals[sig] ? "border-success/30 text-success" : "line-through opacity-50"}`}>
                       {sig}
                     </span>
                   ))}
                   {(t.agents ?? []).length > 0 && <span className="chip">{t.agents!.map(agentName).join(", ")}</span>}
                   {(t.filters ?? []).length > 0 && (
-                    <span className="chip border-lime/30 text-lime">
+                    <span className="chip border-primary/30 text-primary">
                       <Filter className="size-3" /> {t.filters!.length} filter{t.filters!.length > 1 ? "s" : ""}
                     </span>
                   )}
                 </div>
 
-                <div className="mt-5 grid grid-cols-4 gap-2 rounded-xl bg-ink/40 px-3 py-2.5 text-center">
+                <div className="mt-5 grid grid-cols-4 gap-2 rounded-xl bg-well px-3 py-2.5 text-center">
                   <Stat label="sent" value={formatNumber(s?.sent)} />
                   <Stat label="failed" value={formatNumber(s?.failed)} danger={!!s?.failed} />
                   <Stat label="dropped" value={formatNumber(s?.dropped)} danger={!!s?.dropped} />

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
 import { Activity, BookOpen, KeyRound, LogOut, Radio, Settings as SettingsIcon, Waypoints } from "lucide-react"
 import { api, type Info, type Stats, type Target, type TargetsResponse } from "./api"
-import { Brand, GITHUB_URL, GithubIcon, WILLOW_URL } from "./ui"
+import { Brand, GITHUB_URL, GithubIcon, ThemeToggle, WILLOW_URL, WillowWordmark } from "./ui"
 import Login from "./pages/Login"
 import Overview from "./pages/Overview"
 import Targets from "./pages/Targets"
@@ -137,7 +137,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 
   return (
     <div className="flex min-h-full">
-      <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-line bg-ink/40 px-4 py-6">
+      <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-transparent bg-sidebar px-4 py-6 dark:border-line">
         <div className="px-2">
           <Brand />
         </div>
@@ -146,13 +146,13 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             <button
               key={id}
               onClick={() => setPage(id)}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+              className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition ${
                 page === id
-                  ? "bg-lime/10 text-lime shadow-[inset_2px_0_0_var(--color-lime)]"
-                  : "text-muted hover:bg-raised hover:text-fg"
+                  ? "bg-sidebar-active font-bold text-sidebar-active-fg"
+                  : "font-medium text-muted hover:bg-sidebar-hover hover:text-fg"
               }`}
             >
-              <Icon className="size-4" />
+              <Icon className="size-5" />
               {label}
             </button>
           ))}
@@ -163,11 +163,12 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             href={WILLOW_URL}
             target="_blank"
             rel="noreferrer"
-            className="block rounded-xl border border-line bg-gradient-to-br from-forest/40 to-transparent p-3 text-xs text-muted hover:border-lime/30"
+            className="block rounded-xl border border-card-line bg-surface p-3 text-xs text-muted transition hover:border-primary/40"
           >
-            <img src="/willow-full-logo-white.svg" alt="Willow" className="mb-2 h-4 opacity-90" />
+            <WillowWordmark className="mb-2 h-4" />
             Governance and analytics for every AI agent in your company.
           </a>
+          <ThemeToggle />
           <div className="flex items-center justify-between px-2 text-xs text-faint">
             <span className="truncate">{username}</span>
             <button
@@ -199,7 +200,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
         <footer className="flex items-center justify-between border-t border-line px-10 py-4 text-xs text-faint">
           <span>
             Open source by{" "}
-            <a href={WILLOW_URL} target="_blank" rel="noreferrer" className="text-muted hover:text-lime">
+            <a href={WILLOW_URL} target="_blank" rel="noreferrer" className="text-muted hover:text-primary">
               Willow
             </a>{" "}
             · Apache-2.0 · {info?.version ?? ""}

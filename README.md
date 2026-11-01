@@ -65,14 +65,41 @@ Everything the chart accepts is documented in [`charts/otlp-router/values.yaml`]
 
 ### Docker
 
+No config file is needed:
+
 ```bash
-docker run -p 4317:4317 -p 4318:4318 -p 8080:8080 \
+docker run -d --name otlp-router -p 4317:4317 -p 4318:4318 -p 8080:8080 \
   -e OTLP_ROUTER_ADMIN_PASSWORD=change-me \
-  -v "$PWD/config.yaml:/etc/otlp-router/config.yaml:ro" -v otlp-router:/data \
+  -e OTLP_ROUTER_SESSION_SECRET="$(openssl rand -hex 32)" \
+  -v otlp-router:/data \
   ghcr.io/webrix-ai/otlp-router
 ```
 
-Use [`config.example.yaml`](config.example.yaml) as a starting point; it uses the `file` store at `/data`.
+Open http://localhost:8080, sign in as `admin`, and create an ingest token on the **Tokens** page. Targets and tokens
+are kept in the `otlp-router` volume, so they survive restarts and upgrades.
+
+To send to Willow as well, add:
+
+```bash
+  -e OTLP_ROUTER_WILLOW_ORG=acme -e WILLOW_OTLP_TOKEN="$WILLOW_OTLP_TOKEN"
+```
+
+| Variable                          | Sets                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| `OTLP_ROUTER_ADMIN_PASSWORD`      | The UI password (required, or `OTLP_ROUTER_ADMIN_PASSWORD_HASH` for bcrypt)    |
+| `OTLP_ROUTER_ADMIN_USERNAME`      | The UI username, `admin` by default                                           |
+| `OTLP_ROUTER_SESSION_SECRET`      | Signs UI sessions; without it you are signed out on every restart             |
+| `OTLP_ROUTER_INGEST_TOKENS`       | Comma-separated ingest tokens, accepted alongside those created in the UI     |
+| `OTLP_ROUTER_PUBLIC_URL`          | The address agents use, shown in the UI's setup snippets                      |
+| `OTLP_ROUTER_WILLOW_ORG`          | Adds a Willow target for this org on first start, with the privacy filters    |
+| `OTLP_ROUTER_WILLOW_REGION`       | `us` (default), `eu`, or `custom`                                             |
+| `OTLP_ROUTER_WILLOW_CONNECT_URL`  | On-prem or custom-domain Willow; implies `custom` when no org is set          |
+| `WILLOW_OTLP_TOKEN`               | Your org's Willow OTLP token, required with the Willow variables above        |
+
+The Willow target is only added when the store has no targets yet; after that, edit it in the UI.
+
+For anything else, mount a config file at `/etc/otlp-router/config.yaml`, starting from
+[`config.example.yaml`](config.example.yaml). Values set in the file take precedence over the variables.
 
 ## Connect your agents
 

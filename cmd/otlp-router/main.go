@@ -27,6 +27,11 @@ import (
 
 var version = "dev"
 
+// Read when no config path is given and the file exists, so a config mounted
+// into the container needs no flag. Without one, settings come from the
+// environment.
+const defaultConfigPath = "/etc/otlp-router/config.yaml"
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "hash-password" {
 		hashPassword()
@@ -38,6 +43,12 @@ func main() {
 	if *showVersion {
 		fmt.Println(version)
 		return
+	}
+
+	if *configPath == "" {
+		if _, err := os.Stat(defaultConfigPath); err == nil {
+			*configPath = defaultConfigPath
+		}
 	}
 
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))

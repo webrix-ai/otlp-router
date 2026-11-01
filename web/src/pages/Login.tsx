@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react"
 import { ArrowRight, Lock } from "lucide-react"
 import { api } from "../api"
-import { Brand, ErrorBanner, WILLOW_URL } from "../ui"
+import { Brand, ErrorBanner, WILLOW_URL, WillowWordmark } from "../ui"
 
 export default function Login({ onLogin }: { onLogin: (username: string) => void }) {
   const [username, setUsername] = useState("admin")
@@ -25,10 +25,10 @@ export default function Login({ onLogin }: { onLogin: (username: string) => void
 
   return (
     <div className="grid min-h-full lg:grid-cols-[1.1fr_1fr]">
-      <div className="relative hidden overflow-hidden border-r border-line bg-ink/50 p-12 lg:flex lg:flex-col">
+      <div className="relative hidden overflow-hidden border-r border-line bg-sidebar p-12 lg:flex lg:flex-col">
         <Brand />
         <div className="my-auto max-w-md">
-          <p className="mb-4 text-xs font-medium tracking-[0.2em] text-lime uppercase">Open source OTLP router</p>
+          <p className="mb-4 text-xs font-medium tracking-[0.2em] text-primary uppercase">Open source OTLP router</p>
           <h1 className="text-4xl leading-tight font-semibold tracking-tight">
             One endpoint for your AI agents.
             <span className="text-muted"> Every destination, filtered your way.</span>
@@ -40,7 +40,7 @@ export default function Login({ onLogin }: { onLogin: (username: string) => void
           </p>
           <div className="mt-10 grid grid-cols-3 gap-3 text-center text-xs">
             {["gRPC + HTTP", "Per-target filters", "Helm in one line"].map((t) => (
-              <div key={t} className="rounded-xl border border-line bg-surface/60 px-3 py-3 text-muted">
+              <div key={t} className="rounded-xl border border-card-line bg-surface px-3 py-3 text-muted">
                 {t}
               </div>
             ))}
@@ -48,9 +48,9 @@ export default function Login({ onLogin }: { onLogin: (username: string) => void
         </div>
         <a href={WILLOW_URL} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs text-faint hover:text-muted">
           Built and maintained by
-          <img src="/willow-full-logo-white.svg" alt="Willow" className="h-3.5 opacity-80" />
+          <WillowWordmark className="h-3.5 opacity-80" />
         </a>
-        <div className="pointer-events-none absolute -right-40 -bottom-40 size-[520px] rounded-full bg-lime/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-40 -bottom-40 size-[520px] rounded-full bg-primary/10 blur-3xl" />
       </div>
 
       <div className="flex items-center justify-center p-8">
