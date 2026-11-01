@@ -61,11 +61,13 @@ jobs:
           kind load docker-image ghcr.io/webrix-ai/otlp-router:e2e --name otlp-router
       - name: Install a sink and a router that forwards to it
         run: |
-          helm install sink charts/otlp-router -n otel --create-namespace --set image.tag=e2e --set replicaCount=1 --set podDisruptionBudget.enabled=false
+          helm install sink charts/otlp-router -n otel --create-namespace --set image.tag=e2e --set replicaCount=1 --set podDisruptionBudget.enabled=false \
+            --set 'auth.ingestTokens={sink-token}'
           helm install router charts/otlp-router -n otel --set image.tag=e2e \
             --set 'auth.ingestTokens={e2e-token}' \
             --set 'targets[0].name=sink' --set 'targets[0].type=otlpgrpc' --set 'targets[0].enabled=true' \
-            --set 'targets[0].endpoint=http://sink-otlp-router.otel.svc:4317'
+            --set 'targets[0].endpoint=http://sink-otlp-router.otel.svc:4317' \
+            --set 'targets[0].headers.authorization=Bearer sink-token'
           kubectl -n otel rollout status deploy/router-otlp-router --timeout=180s
           kubectl -n otel rollout status deploy/sink-otlp-router --timeout=180s
       - name: Send telemetry and check the sink received it
