@@ -77,6 +77,9 @@ func TestLiveShowsWhereEachRequestWent(t *testing.T) {
 	if accepted.Status != router.LiveAccepted || accepted.Items != 2 || accepted.Agents["claude-code"] != 2 || accepted.Token != router.ConfigTokenName {
 		t.Fatalf("accepted entry: %+v", accepted)
 	}
+	if accepted.Names["user_prompt"] != 1 || accepted.Names["claude_code.api_request"] != 1 {
+		t.Fatalf("names: %+v", accepted.Names)
+	}
 	got := map[string]router.LiveTarget{}
 	for _, tg := range accepted.Targets {
 		got[tg.ID] = tg

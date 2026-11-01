@@ -214,7 +214,8 @@ the page and keep nothing.
 - The router keeps the last few payloads per signal in memory for the filter preview. They can contain prompts, are
   shown only to the admin, and are never written to disk.
 - The Live page keeps request details only, never the telemetry: user email and device id from the agent's
-  headers, the ingest token's name, item counts and delivery errors. Replicas share them with each other only when
+  headers, the ingest token's name, item counts, the 20 most frequent span, metric or event names, and delivery
+  errors. Replicas share them with each other only when
   they present a token derived from `auth.sessionSecret`.
 - `/metrics` (Prometheus) is unauthenticated and exposes counters and target ids only.
 
