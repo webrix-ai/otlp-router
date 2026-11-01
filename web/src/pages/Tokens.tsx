@@ -104,7 +104,7 @@ export default function Tokens() {
                     {t.expiresAt ? (
                       <span className="chip border-warn/30 text-warn">Expires in {timeUntil(t.expiresAt)}</span>
                     ) : (
-                      <span className="chip border-mint/30 text-mint">Active</span>
+                      <span className="chip border-success/30 text-success">Active</span>
                     )}
                   </td>
                   <td className="px-5 py-3.5">
@@ -257,10 +257,10 @@ function RotateDialog({
           <label
             key={o.seconds}
             className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition ${
-              grace === o.seconds ? "border-lime/50 bg-lime/10" : "border-line hover:border-line-strong"
+              grace === o.seconds ? "border-primary/50 bg-primary/10" : "border-line hover:border-line-strong"
             }`}
           >
-            <input type="radio" name="grace" className="accent-lime" checked={grace === o.seconds} onChange={() => setGrace(o.seconds)} />
+            <input type="radio" name="grace" className="accent-primary" checked={grace === o.seconds} onChange={() => setGrace(o.seconds)} />
             {o.label}
           </label>
         ))}

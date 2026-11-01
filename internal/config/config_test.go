@@ -39,6 +39,122 @@ func TestUnsetIngestTokenIsDropped(t *testing.T) {
 	}
 }
 
+// clearRouterEnv unsets every variable applyEnv reads, so a test sees only
+// what it sets.
+func clearRouterEnv(t *testing.T) {
+	for _, name := range []string{
+		"OTLP_ROUTER_PUBLIC_URL", "OTLP_ROUTER_ADMIN_USERNAME", "OTLP_ROUTER_ADMIN_PASSWORD",
+		"OTLP_ROUTER_ADMIN_PASSWORD_HASH", "OTLP_ROUTER_SESSION_SECRET", "OTLP_ROUTER_INGEST_TOKENS",
+		"OTLP_ROUTER_STORE", "OTLP_ROUTER_STORE_PATH", "OTLP_ROUTER_WILLOW_ORG",
+		"OTLP_ROUTER_WILLOW_REGION", "OTLP_ROUTER_WILLOW_CONNECT_URL", "WILLOW_OTLP_TOKEN",
+	} {
+		t.Setenv(name, "")
+	}
+}
+
+func TestLoadFromEnvOnly(t *testing.T) {
+	clearRouterEnv(t)
+	if _, err := Load(""); err == nil {
+		t.Fatal("expected an error without an admin password")
+	}
+	t.Setenv("OTLP_ROUTER_ADMIN_PASSWORD", "pw")
+	t.Setenv("OTLP_ROUTER_SESSION_SECRET", "s")
+	t.Setenv("OTLP_ROUTER_INGEST_TOKENS", "a, b")
+	t.Setenv("OTLP_ROUTER_PUBLIC_URL", "https://otel.acme.internal")
+	t.Setenv("OTLP_ROUTER_STORE", "file")
+	t.Setenv("OTLP_ROUTER_STORE_PATH", "/data/targets.yaml")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Auth.Admin.Username != "admin" || cfg.Auth.Admin.Password != "pw" || cfg.Auth.SessionSecret != "s" {
+		t.Fatalf("auth not read from env: %+v", cfg.Auth)
+	}
+	if len(cfg.Auth.IngestTokens) != 2 || cfg.Auth.IngestTokens[1] != "b" {
+		t.Fatalf("tokens not read from env: %q", cfg.Auth.IngestTokens)
+	}
+	if cfg.PublicURL != "https://otel.acme.internal" || cfg.Store.Type != StoreFile || cfg.Store.Path != "/data/targets.yaml" {
+		t.Fatalf("env not applied: %+v", cfg)
+	}
+	if len(cfg.Targets) != 0 {
+		t.Fatalf("no target should be seeded without a Willow org: %+v", cfg.Targets)
+	}
+}
+
+func TestConfigFileWinsOverEnv(t *testing.T) {
+	clearRouterEnv(t)
+	t.Setenv("OTLP_ROUTER_ADMIN_PASSWORD", "from-env")
+	t.Setenv("OTLP_ROUTER_STORE", "file")
+	t.Setenv("OTLP_ROUTER_STORE_PATH", "/data/targets.yaml")
+	t.Setenv("OTLP_ROUTER_WILLOW_ORG", "acme")
+	t.Setenv("WILLOW_OTLP_TOKEN", "t")
+	path := filepath.Join(t.TempDir(), "c.yaml")
+	raw := "auth:\n  admin:\n    passwordHash: h\nstore:\n  type: memory\ntargets:\n  - name: x\n    type: otlphttp\n    endpoint: https://x\n"
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Auth.Admin.Password != "" || cfg.Auth.Admin.PasswordHash != "h" {
+		t.Fatalf("env password must not be added to a file that sets a hash: %+v", cfg.Auth.Admin)
+	}
+	if cfg.Store.Type != StoreMemory {
+		t.Fatalf("file store type overridden: %q", cfg.Store.Type)
+	}
+	if len(cfg.Targets) != 1 || cfg.Targets[0].Name != "x" {
+		t.Fatalf("targets from the file must not get a Willow target added: %+v", cfg.Targets)
+	}
+}
+
+func TestWillowTargetFromEnv(t *testing.T) {
+	clearRouterEnv(t)
+	t.Setenv("OTLP_ROUTER_ADMIN_PASSWORD", "pw")
+	t.Setenv("OTLP_ROUTER_WILLOW_ORG", "acme")
+	if _, err := Load(""); err == nil {
+		t.Fatal("expected an error without WILLOW_OTLP_TOKEN")
+	}
+	t.Setenv("WILLOW_OTLP_TOKEN", "secret")
+	t.Setenv("OTLP_ROUTER_WILLOW_REGION", "eu")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Targets) != 1 {
+		t.Fatalf("expected one Willow target: %+v", cfg.Targets)
+	}
+	w := cfg.Targets[0]
+	if w.Type != TypeWillow || !w.Enabled || len(w.Filters) != 2 {
+		t.Fatalf("willow target: %+v", w)
+	}
+	if w.Willow.Token != "${env:WILLOW_OTLP_TOKEN}" {
+		t.Fatal("the token must stay a reference so it is never written to the store")
+	}
+	out, err := NormalizeTargets(cfg.Targets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := out[0].ResolvedEndpoint(); got != "https://acme.eu.withwillow.ai/otlp" {
+		t.Fatalf("endpoint: %s", got)
+	}
+
+	t.Setenv("OTLP_ROUTER_WILLOW_ORG", "")
+	t.Setenv("OTLP_ROUTER_WILLOW_REGION", "")
+	t.Setenv("OTLP_ROUTER_WILLOW_CONNECT_URL", "https://willow.acme.internal")
+	cfg, err = Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err = NormalizeTargets(cfg.Targets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := out[0].ResolvedEndpoint(); got != "https://willow.acme.internal/otlp" {
+		t.Fatalf("a connect URL alone should mean the custom region: %s", got)
+	}
+}
+
 func TestNormalizeTargets(t *testing.T) {
 	out, err := NormalizeTargets([]Target{
 		{Name: "Grafana Cloud", Type: TypeOTLPHTTP, Endpoint: "https://x"},

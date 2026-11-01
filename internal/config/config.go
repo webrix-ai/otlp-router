@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -15,7 +16,8 @@ import (
 )
 
 // Config is read once at startup. Everything here is owned by the operator
-// (Helm values or a mounted file); the UI cannot change it.
+// (Helm values, a mounted file or OTLP_ROUTER_* variables); the UI cannot
+// change it.
 type Config struct {
 	Listen    Listen   `yaml:"listen"`
 	PublicURL string   `yaml:"publicUrl"`
@@ -169,8 +171,73 @@ func Load(path string) (*Config, error) {
 		tokens = append(tokens, strings.Split(ExpandEnv(t), ",")...)
 	}
 	cfg.Auth.IngestTokens = tokens
+	if err := cfg.applyEnv(); err != nil {
+		return nil, err
+	}
 	cfg.applyDefaults()
 	return cfg, cfg.validate()
+}
+
+// Willow filters for a target seeded from the environment, matching the Helm
+// chart's willow.filters default.
+var willowEnvFilters = []filter.Rule{
+	{Type: filter.DropLogEvents, Names: []string{"*user_prompt", "*.user_prompt", "gen_ai.user.message"}},
+	{Type: filter.Redact, Builtins: true},
+}
+
+// applyEnv fills what the config file leaves empty from OTLP_ROUTER_*
+// variables, so `docker run -e ...` works without a config file. A value in
+// the file always wins.
+func (c *Config) applyEnv() error {
+	setFromEnv(&c.PublicURL, "OTLP_ROUTER_PUBLIC_URL")
+	setFromEnv(&c.Auth.Admin.Username, "OTLP_ROUTER_ADMIN_USERNAME")
+	if c.Auth.Admin.Password == "" && c.Auth.Admin.PasswordHash == "" {
+		setFromEnv(&c.Auth.Admin.PasswordHash, "OTLP_ROUTER_ADMIN_PASSWORD_HASH")
+		if c.Auth.Admin.PasswordHash == "" {
+			setFromEnv(&c.Auth.Admin.Password, "OTLP_ROUTER_ADMIN_PASSWORD")
+		}
+	}
+	setFromEnv(&c.Auth.SessionSecret, "OTLP_ROUTER_SESSION_SECRET")
+	if strings.TrimSpace(strings.Join(c.Auth.IngestTokens, "")) == "" {
+		c.Auth.IngestTokens = strings.Split(os.Getenv("OTLP_ROUTER_INGEST_TOKENS"), ",")
+	}
+	if c.Store.Type == "" {
+		c.Store.Type = StoreType(os.Getenv("OTLP_ROUTER_STORE"))
+	}
+	setFromEnv(&c.Store.Path, "OTLP_ROUTER_STORE_PATH")
+
+	org := strings.TrimSpace(os.Getenv("OTLP_ROUTER_WILLOW_ORG"))
+	connectURL := strings.TrimSpace(os.Getenv("OTLP_ROUTER_WILLOW_CONNECT_URL"))
+	if len(c.Targets) > 0 || (org == "" && connectURL == "") {
+		return nil
+	}
+	if os.Getenv("WILLOW_OTLP_TOKEN") == "" {
+		return fmt.Errorf("WILLOW_OTLP_TOKEN is required with OTLP_ROUTER_WILLOW_ORG or OTLP_ROUTER_WILLOW_CONNECT_URL")
+	}
+	region := os.Getenv("OTLP_ROUTER_WILLOW_REGION")
+	if region == "" && org == "" {
+		region = WillowRegionCustom
+	}
+	c.Targets = []Target{{
+		Name:    "Willow",
+		Type:    TypeWillow,
+		Enabled: true,
+		Willow: &WillowSettings{
+			Org:        org,
+			Region:     region,
+			ConnectURL: connectURL,
+			// A reference, so the store keeps the variable name, not the token.
+			Token: "${env:WILLOW_OTLP_TOKEN}",
+		},
+		Filters: slices.Clone(willowEnvFilters),
+	}}
+	return nil
+}
+
+func setFromEnv(field *string, name string) {
+	if *field == "" {
+		*field = os.Getenv(name)
+	}
 }
 
 func (c *Config) applyDefaults() {
@@ -200,7 +267,7 @@ func (c *Config) applyDefaults() {
 
 func (c *Config) validate() error {
 	if c.Auth.Admin.Password == "" && c.Auth.Admin.PasswordHash == "" {
-		return fmt.Errorf("auth.admin.password or auth.admin.passwordHash is required")
+		return fmt.Errorf("an admin password is required: set OTLP_ROUTER_ADMIN_PASSWORD, or auth.admin.password or auth.admin.passwordHash in the config file")
 	}
 	switch c.Store.Type {
 	case StoreMemory:

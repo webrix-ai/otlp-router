@@ -28,11 +28,11 @@ export default function Sources() {
       <div className="card mb-6 flex flex-wrap items-center gap-6 p-5 text-sm">
         <div>
           <div className="label">OTLP/HTTP endpoint</div>
-          <code className="font-mono text-lime">{url}</code>
+          <code className="font-mono text-primary">{url}</code>
         </div>
         <div>
           <div className="label">Ingest auth</div>
-          <span className={info?.ingestAuth ? "text-mint" : "text-warn"}>
+          <span className={info?.ingestAuth ? "text-success" : "text-warn"}>
             {info?.ingestAuth ? "Bearer token required" : "Open: anyone on the network can send"}
           </span>
         </div>
@@ -42,7 +42,7 @@ export default function Sources() {
             {freshToken ? (
               <span className="text-fg">{freshToken.name}</span>
             ) : (
-              <a href="#/tokens" className="text-lime hover:underline">
+              <a href="#/tokens" className="text-primary hover:underline">
                 Create a token to fill it in
               </a>
             )}
@@ -60,10 +60,10 @@ export default function Sources() {
               key={a.slug}
               onClick={() => setSelected(a.slug)}
               className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
-                selected === a.slug ? "border-lime/50 bg-lime/10" : "border-line hover:border-line-strong"
+                selected === a.slug ? "border-primary/50 bg-primary/10" : "border-line bg-surface hover:border-line-strong"
               }`}
             >
-              {seen.has(a.slug) ? <CheckCircle2 className="size-4 text-mint" /> : <Circle className="size-4 text-faint" />}
+              {seen.has(a.slug) ? <CheckCircle2 className="size-4 text-success" /> : <Circle className="size-4 text-faint" />}
               <div className="min-w-0">
                 <div className="text-sm font-medium">{a.name}</div>
                 <div className="truncate text-[11px] text-faint">{a.vendor}</div>

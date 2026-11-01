@@ -50,18 +50,18 @@ export default function Overview() {
             <div className="text-xs tracking-wide text-muted uppercase">{SIGNAL_LABEL[s]}</div>
             <div className="mt-2 text-3xl font-semibold tabular-nums">{formatNumber(stats?.ingest.items[s])}</div>
             <div className="mt-1 text-xs text-faint tabular-nums">
-              {rates[s] > 0 ? <span className="text-lime">{rates[s].toFixed(1)}/s</span> : "idle"} ·{" "}
+              {rates[s] > 0 ? <span className="text-primary">{rates[s].toFixed(1)}/s</span> : "idle"} ·{" "}
               {formatNumber(stats?.ingest.batches[s])} requests
             </div>
           </div>
         ))}
-        <div className="card flex flex-col justify-between bg-gradient-to-br from-lime/10 to-transparent p-5">
+        <div className="card flex flex-col justify-between bg-gradient-to-br from-primary/10 to-surface p-5">
           <div className="text-xs tracking-wide text-muted uppercase">Targets</div>
           <div className="mt-2 text-3xl font-semibold tabular-nums">
             {active}
             <span className="text-lg text-faint"> / {targets.length}</span>
           </div>
-          <a href="#/targets" className="mt-1 flex items-center gap-1 text-xs text-lime hover:underline">
+          <a href="#/targets" className="mt-1 flex items-center gap-1 text-xs text-primary hover:underline">
             Manage targets <ArrowRight className="size-3" />
           </a>
         </div>
@@ -106,7 +106,7 @@ export default function Overview() {
           ) : (
             <div className="space-y-2">
               {agents.map((a) => (
-                <div key={a.agent} className="flex items-center justify-between rounded-lg bg-raised/60 px-3 py-2.5">
+                <div key={a.agent} className="flex items-center justify-between rounded-lg bg-well px-3 py-2.5">
                   <div>
                     <div className="text-sm font-medium">{agentName(a.agent)}</div>
                     <div className="text-xs text-faint">{timeAgo(a.lastSeenAt)}</div>
@@ -139,7 +139,7 @@ function Metric({ label, value, danger }: { label: string; value?: number; dange
 
 function Empty({ text, href }: { text: string; href: string }) {
   return (
-    <a href={href} className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line py-10 text-sm text-muted hover:border-lime/40">
+    <a href={href} className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line py-10 text-sm text-muted hover:border-primary/40">
       <Inbox className="size-5 text-faint" />
       {text}
     </a>

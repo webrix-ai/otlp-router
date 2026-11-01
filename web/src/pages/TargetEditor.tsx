@@ -123,7 +123,7 @@ export default function TargetEditor({ initial, onClose }: { initial: Target; on
             </button>
           )}
           {test && (
-            <span className={`mr-2 max-w-sm truncate text-xs ${test.ok ? "text-mint" : "text-danger"}`} title={test.error}>
+            <span className={`mr-2 max-w-sm truncate text-xs ${test.ok ? "text-success" : "text-danger"}`} title={test.error}>
               {test.ok ? "Connection OK" : test.error}
             </span>
           )}
@@ -158,11 +158,11 @@ export default function TargetEditor({ initial, onClose }: { initial: Target; on
                     key={type}
                     onClick={() => setT({ ...newTarget(type), name: t.name && t.type === type ? t.name : newTarget(type).name })}
                     className={`rounded-xl border p-3 text-left transition ${
-                      t.type === type ? "border-lime/60 bg-lime/10" : "border-line hover:border-line-strong"
+                      t.type === type ? "border-primary/60 bg-primary/10" : "border-line hover:border-line-strong"
                     }`}
                   >
                     <div className="flex items-center gap-1.5 text-sm font-medium">
-                      {type === "willow" && <img src="/willow-logo-green.svg" alt="" className="size-3.5" />}
+                      {type === "willow" && <img src="/willow-logo-green.svg" alt="" className="size-4 rounded-full bg-logo-bg p-0.5" />}
                       {label}
                     </div>
                     <div className="mt-0.5 text-[11px] text-faint">{hint}</div>
@@ -288,7 +288,7 @@ export default function TargetEditor({ initial, onClose }: { initial: Target; on
                       key={a}
                       onClick={() => patch({ agents: on ? t.agents!.filter((x) => x !== a) : [...(t.agents ?? []), a] })}
                       className={`rounded-full border px-2.5 py-1 text-xs transition ${
-                        on ? "border-lime/60 bg-lime/15 text-lime" : "border-line text-muted hover:border-line-strong"
+                        on ? "border-primary/60 bg-primary/15 text-primary" : "border-line text-muted hover:border-line-strong"
                       }`}
                     >
                       {agentName(a)}
@@ -308,7 +308,7 @@ export default function TargetEditor({ initial, onClose }: { initial: Target; on
             <div className="flex flex-wrap gap-2">
               {(info?.presets ?? []).map((p) => (
                 <button key={p.id} className="btn-ghost py-1.5 text-xs" title={p.description} onClick={() => setRules([...rules, ...p.rules])}>
-                  <Sparkles className="size-3.5 text-lime" /> {p.name}
+                  <Sparkles className="size-3.5 text-primary" /> {p.name}
                 </button>
               ))}
             </div>
@@ -413,9 +413,9 @@ function RuleEditor({
   const meta = RULES[rule.type]
   const values = rule[meta.field] ?? []
   return (
-    <div className="rounded-xl border border-line bg-raised/50 p-3">
+    <div className="rounded-xl border border-line bg-well p-3">
       <div className="mb-2 flex items-center gap-2">
-        <Wand2 className="size-3.5 text-lime" />
+        <Wand2 className="size-3.5 text-primary" />
         <span className="text-sm font-medium">{meta.label}</span>
         <span className="ml-auto flex gap-0.5 text-faint">
           <IconBtn label="Move up" onClick={() => onMove(-1)}>
@@ -515,7 +515,7 @@ function Preview({ target }: { target: Target }) {
         </button>
         {result?.available && (
           <span className="text-xs text-muted">
-            {result.beforeItems} → <span className="text-lime">{result.afterItems}</span> items
+            {result.beforeItems} → <span className="text-primary">{result.afterItems}</span> items
           </span>
         )}
       </div>
@@ -534,7 +534,7 @@ function Preview({ target }: { target: Target }) {
 function JsonPane({ title, value, highlight }: { title: string; value: unknown; highlight?: boolean }) {
   return (
     <div>
-      <div className={`mb-1 text-[11px] tracking-wide uppercase ${highlight ? "text-lime" : "text-faint"}`}>{title}</div>
+      <div className={`mb-1 text-[11px] tracking-wide uppercase ${highlight ? "text-primary" : "text-faint"}`}>{title}</div>
       <pre className="code max-h-64 overflow-auto">{JSON.stringify(value, null, 2)}</pre>
     </div>
   )

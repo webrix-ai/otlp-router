@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { Check, Copy, X } from "lucide-react"
+import { Check, Copy, Moon, Sun, X } from "lucide-react"
 
 export const GITHUB_URL = "https://github.com/webrix-ai/otlp-router"
 export const WILLOW_URL = "https://withwillow.ai"
@@ -15,18 +15,81 @@ export function GithubIcon({ className }: { className?: string }) {
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <div className="grid size-9 place-items-center rounded-xl border border-lime/20 bg-lime/10 shadow-[0_0_24px_-6px_rgb(197_255_89/0.5)]">
+      <div className="grid size-10 place-items-center rounded-full bg-logo-bg">
         <img src="/willow-logo-green.svg" alt="" className="size-5" />
       </div>
       {!compact && (
         <div className="leading-tight">
           <div className="text-[15px] font-semibold tracking-tight">OTLP Router</div>
-          <a href={WILLOW_URL} target="_blank" rel="noreferrer" className="text-[11px] text-muted hover:text-lime">
+          <a href={WILLOW_URL} target="_blank" rel="noreferrer" className="text-[11px] text-muted hover:text-primary">
             by Willow
           </a>
         </div>
       )}
     </div>
+  )
+}
+
+export function WillowWordmark({ className }: { className?: string }) {
+  return (
+    <>
+      <img src="/willow-full-logo-dark.svg" alt="Willow" className={`${className} dark:hidden`} />
+      <img src="/willow-full-logo-white.svg" alt="Willow" className={`${className} hidden dark:block`} />
+    </>
+  )
+}
+
+export type Theme = "light" | "dark"
+
+const THEME_KEY = "otlp-router:theme"
+
+export function useTheme(): [Theme, (t: Theme) => void] {
+  const [theme, setThemeState] = useState<Theme>(() =>
+    document.documentElement.classList.contains("dark") ? "dark" : "light"
+  )
+  const setTheme = (t: Theme) => {
+    document.documentElement.classList.toggle("dark", t === "dark")
+    try {
+      localStorage.setItem(THEME_KEY, t)
+    } catch {
+      // Private mode: the choice lasts until reload.
+    }
+    setThemeState(t)
+  }
+  return [theme, setTheme]
+}
+
+export function ThemeToggle() {
+  const [theme, setTheme] = useTheme()
+  const dark = theme === "dark"
+  return (
+    <button
+      type="button"
+      className="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-muted transition hover:bg-sidebar-hover hover:text-fg"
+      onClick={() => setTheme(dark ? "light" : "dark")}
+    >
+      <span className="flex items-center gap-2.5">
+        {dark ? <Moon className="size-4" /> : <Sun className="size-4" />}
+        Dark mode
+      </span>
+      <Switch checked={dark} />
+    </button>
+  )
+}
+
+function Switch({ checked }: { checked: boolean }) {
+  return (
+    <span
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 transition-colors ${
+        checked ? "border-primary bg-primary" : "border-line bg-line dark:border-muted/40 dark:bg-muted/30"
+      }`}
+    >
+      <span
+        className={`inline-block size-5 rounded-full bg-white shadow-md transition-transform dark:bg-[#fffdf7] ${
+          checked ? "translate-x-5" : "translate-x-0"
+        }`}
+      />
+    </span>
   )
 }
 
@@ -49,15 +112,9 @@ export function Toggle({
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition disabled:opacity-50 ${
-        checked ? "border-lime/50 bg-lime" : "border-line-strong bg-ink"
-      }`}
+      className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
     >
-      <span
-        className={`inline-block size-4 rounded-full shadow transition ${
-          checked ? "translate-x-6 bg-ink" : "translate-x-1 bg-muted"
-        }`}
-      />
+      <Switch checked={checked} />
     </button>
   )
 }
@@ -66,8 +123,8 @@ export type Health = "ok" | "error" | "idle" | "off"
 
 export function StatusDot({ health }: { health: Health }) {
   const color = {
-    ok: "bg-mint shadow-[0_0_10px_rgb(74_187_133/0.8)]",
-    error: "bg-danger shadow-[0_0_10px_rgb(255_122_107/0.7)]",
+    ok: "bg-success ring-4 ring-success/20",
+    error: "bg-danger ring-4 ring-danger/20",
     idle: "bg-sage",
     off: "bg-faint"
   }[health]
@@ -95,9 +152,9 @@ export function Modal({
     return () => window.removeEventListener("keydown", onKey)
   }, [onClose])
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-ink/70 backdrop-blur-sm" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-overlay backdrop-blur-sm" onMouseDown={onClose}>
       <div
-        className={`flex h-full w-full flex-col border-l border-line bg-canvas shadow-2xl ${wide ? "max-w-5xl" : "max-w-xl"}`}
+        className={`flex h-full w-full flex-col border-l border-line bg-surface shadow-2xl ${wide ? "max-w-5xl" : "max-w-xl"}`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between border-b border-line px-6 py-5">
@@ -128,7 +185,7 @@ export function CopyButton({ text }: { text: string }) {
         setTimeout(() => setCopied(false), 1500)
       }}
     >
-      {copied ? <Check className="size-3.5 text-lime" /> : <Copy className="size-3.5" />}
+      {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
       {copied ? "Copied" : "Copy"}
     </button>
   )

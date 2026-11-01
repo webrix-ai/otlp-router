@@ -25,7 +25,7 @@ export default function Settings() {
           label="Ingest auth"
           value={
             info?.ingestAuth ? (
-              <a href="#/tokens" className="hover:text-lime">
+              <a href="#/tokens" className="hover:text-primary">
                 Bearer token required · manage tokens
               </a>
             ) : (
