@@ -20,6 +20,7 @@ data:
       ingestTokens: ["${env:OTLP_ROUTER_INGEST_TOKENS}"]
       allowUnauthenticatedIngest: {{ .Values.auth.allowUnauthenticatedIngest }}
     readOnly: {{ .Values.readOnly }}
+    disableLive: {{ not .Values.live.enabled }}
     store:
       type: configmap
       configMap:

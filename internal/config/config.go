@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -28,8 +29,11 @@ type Config struct {
 	// Peers is host:port of a DNS name that resolves to every replica's admin
 	// listener, e.g. a headless Service. When set, the UI's stats add up all
 	// replicas instead of showing only the one that served the request.
-	Peers   string   `yaml:"peers"`
-	Targets []Target `yaml:"targets"`
+	Peers string `yaml:"peers"`
+	// DisableLive hides the UI's live view of recent requests and stops
+	// keeping them in memory.
+	DisableLive bool     `yaml:"disableLive"`
+	Targets     []Target `yaml:"targets"`
 }
 
 type Listen struct {
@@ -212,6 +216,13 @@ func (c *Config) applyEnv() error {
 	}
 	setFromEnv(&c.Store.Path, "OTLP_ROUTER_STORE_PATH")
 	setFromEnv(&c.Peers, "OTLP_ROUTER_PEERS")
+	if v := os.Getenv("OTLP_ROUTER_DISABLE_LIVE"); v != "" && !c.DisableLive {
+		disable, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("OTLP_ROUTER_DISABLE_LIVE must be true or false: %w", err)
+		}
+		c.DisableLive = disable
+	}
 
 	org := strings.TrimSpace(os.Getenv("OTLP_ROUTER_WILLOW_ORG"))
 	connectURL := strings.TrimSpace(os.Getenv("OTLP_ROUTER_WILLOW_CONNECT_URL"))

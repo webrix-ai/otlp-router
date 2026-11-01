@@ -35,6 +35,11 @@ auth:
 # `targets` below instead (GitOps).
 readOnly: false
 
+# The UI's Live page of the latest requests and where they went. Kept in each
+# replica's memory only. Set false to hide it.
+live:
+  enabled: true
+
 # Built-in Willow target. Adds a target seeded with the privacy preset.
 willow:
   enabled: false

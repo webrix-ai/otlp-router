@@ -36,19 +36,41 @@ type permanentError struct{ err error }
 func (e permanentError) Error() string { return e.err.Error() }
 func (e permanentError) Unwrap() error { return e.err }
 
+// What happened to one payload at one target, for the live view.
+const (
+	StatusFiltered = "filtered"
+	StatusDropped  = "dropped"
+	StatusQueued   = "queued"
+	StatusRetrying = "retrying"
+	StatusSent     = "sent"
+	StatusFailed   = "failed"
+)
+
+type Result struct {
+	Target string
+	Status string
+	Items  int
+	Error  string
+}
+
+// Reporter receives the result of payloads that carry a LiveID.
+type Reporter func(liveID uint64, r Result)
+
 type Exporter struct {
 	Target config.Target
 	chain  *filter.Chain
 	sender sender
 	queue  chan telemetry.Payload
 	stats  stats
+	report Reporter
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 	log    *slog.Logger
 }
 
-func New(t config.Target, log *slog.Logger) (*Exporter, error) {
+// New starts the target's workers. report may be nil.
+func New(t config.Target, log *slog.Logger, report Reporter) (*Exporter, error) {
 	chain, err := compileFilters(t)
 	if err != nil {
 		return nil, err
@@ -69,6 +91,7 @@ func New(t config.Target, log *slog.Logger) (*Exporter, error) {
 		chain:  chain,
 		sender: s,
 		queue:  make(chan telemetry.Payload, defaultQueueSize),
+		report: report,
 		ctx:    ctx,
 		cancel: cancel,
 		log:    log.With("target", t.ID),
@@ -91,14 +114,29 @@ func (e *Exporter) Offer(p telemetry.Payload) {
 	e.chain.Apply(c)
 	if c.Empty() {
 		e.stats.filtered.Add(1)
+		e.result(c, StatusFiltered, nil)
 		return
 	}
 	select {
 	case e.queue <- c:
+		e.result(c, StatusQueued, nil)
 	default:
+		err := fmt.Errorf("queue full, dropped %d %s", c.Items(), c.Signal)
 		e.stats.dropped.Add(int64(c.Items()))
-		e.stats.setError(fmt.Errorf("queue full, dropped %d %s", c.Items(), c.Signal))
+		e.stats.setError(err)
+		e.result(c, StatusDropped, err)
 	}
+}
+
+func (e *Exporter) result(p telemetry.Payload, status string, err error) {
+	if e.report == nil || p.LiveID == 0 {
+		return
+	}
+	r := Result{Target: e.Target.ID, Status: status, Items: p.Items()}
+	if err != nil {
+		r.Error = err.Error()
+	}
+	e.report(p.LiveID, r)
 }
 
 // Preview applies this target's pipeline to a copy without sending it.
@@ -158,21 +196,25 @@ func (e *Exporter) deliver(p telemetry.Payload) {
 			e.stats.sent.Add(int64(p.Items()))
 			e.stats.batches.Add(1)
 			e.stats.lastSuccess.Store(time.Now().UnixMilli())
+			e.result(p, StatusSent, nil)
 			return
 		}
 		var perm permanentError
 		if errors.As(err, &perm) || time.Since(start)+backoff > maxRetryElapsed || e.ctx.Err() != nil {
 			e.stats.failed.Add(int64(p.Items()))
 			e.stats.setError(err)
+			e.result(p, StatusFailed, err)
 			e.log.Warn("export failed", "signal", p.Signal, "items", p.Items(), "err", err)
 			return
 		}
 		e.stats.retries.Add(1)
 		e.stats.setError(fmt.Errorf("retrying: %w", err))
+		e.result(p, StatusRetrying, err)
 		select {
 		case <-time.After(backoff):
 		case <-e.ctx.Done():
 			e.stats.failed.Add(int64(p.Items()))
+			e.result(p, StatusFailed, err)
 			return
 		}
 		backoff = min(backoff*2, maxBackoff)

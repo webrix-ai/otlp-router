@@ -1,9 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
-import { Activity, BookOpen, KeyRound, LogOut, Radio, Settings as SettingsIcon, Waypoints } from "lucide-react"
+import { Activity, BookOpen, KeyRound, LogOut, Radio, ScrollText, Settings as SettingsIcon, Waypoints } from "lucide-react"
 import { api, type Info, type Stats, type Target, type TargetsResponse } from "./api"
 import { Brand, GITHUB_URL, GithubIcon, ThemeToggle, WILLOW_URL, WillowWordmark } from "./ui"
 import Login from "./pages/Login"
 import Overview from "./pages/Overview"
+import Live from "./pages/Live"
 import Targets from "./pages/Targets"
 import Sources from "./pages/Sources"
 import Tokens from "./pages/Tokens"
@@ -37,6 +38,7 @@ export function useRouterData(): RouterData {
 
 const PAGES = [
   { id: "overview", label: "Overview", icon: Activity },
+  { id: "live", label: "Live", icon: ScrollText },
   { id: "targets", label: "Targets", icon: Waypoints },
   { id: "sources", label: "Agents", icon: Radio },
   { id: "tokens", label: "Tokens", icon: KeyRound },
@@ -142,7 +144,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
           <Brand />
         </div>
         <nav className="mt-10 flex flex-col gap-1">
-          {PAGES.map(({ id, label, icon: Icon }) => (
+          {PAGES.filter((p) => p.id !== "live" || info?.live).map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setPage(id)}
@@ -192,6 +194,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             </div>
           )}
           {page === "overview" && <Overview />}
+          {page === "live" && info?.live && <Live />}
           {page === "targets" && <Targets />}
           {page === "sources" && <Sources />}
           {page === "tokens" && <Tokens />}

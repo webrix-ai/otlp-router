@@ -37,11 +37,11 @@ func peerServer(t *testing.T) *server {
 	return s
 }
 
-// fakePeer serves fixed stats to callers that present the peer token.
-func fakePeer(t *testing.T, token string, p podStats) string {
+// fakePeer serves a fixed body on path to callers that present the peer token.
+func fakePeer(t *testing.T, token, path string, p any) string {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/internal/stats" || r.Header.Get(peerHeader) != token {
+		if r.URL.Path != path || r.Header.Get(peerHeader) != token {
 			http.NotFound(w, r)
 			return
 		}
@@ -70,7 +70,7 @@ func TestInternalStatsNeedsPeerToken(t *testing.T) {
 
 func TestClusterStatsAddsUpReplicas(t *testing.T) {
 	s := peerServer(t)
-	a := fakePeer(t, s.peerToken(), podStats{
+	a := fakePeer(t, s.peerToken(), "/internal/stats", podStats{
 		Ingest: router.IngestSnapshot{
 			Items:   map[string]int64{"logs": 10},
 			Batches: map[string]int64{"logs": 2},
@@ -78,7 +78,7 @@ func TestClusterStatsAddsUpReplicas(t *testing.T) {
 		},
 		Targets: map[string]exporter.Snapshot{"willow": {Sent: 64, QueueLen: 1, LastSuccessAt: 500, LastError: "old", LastErrorAt: 50}},
 	})
-	b := fakePeer(t, s.peerToken(), podStats{
+	b := fakePeer(t, s.peerToken(), "/internal/stats", podStats{
 		Ingest: router.IngestSnapshot{
 			Items:   map[string]int64{"logs": 5},
 			Batches: map[string]int64{"logs": 1},
