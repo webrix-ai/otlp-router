@@ -117,6 +117,7 @@ export interface LiveEntry {
   error?: string
   items: number
   agents?: Record<string, number>
+  names?: Record<string, number>
   token?: string
   user?: string
   device?: string

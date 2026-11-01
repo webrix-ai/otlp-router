@@ -15,6 +15,7 @@ import (
 
 const (
 	liveCapacity = 1000
+	liveNames    = 20
 	// LiveLimit caps the entries one live request returns.
 	LiveLimit = 200
 
@@ -41,10 +42,12 @@ type LiveEntry struct {
 	Error     string         `json:"error,omitempty"`
 	Items     int            `json:"items"`
 	Agents    map[string]int `json:"agents,omitempty"`
-	Token     string         `json:"token,omitempty"`
-	User      string         `json:"user,omitempty"`
-	Device    string         `json:"device,omitempty"`
-	Targets   []LiveTarget   `json:"targets,omitempty"`
+	// Names counts the span, metric or log event names in the request.
+	Names   map[string]int `json:"names,omitempty"`
+	Token   string         `json:"token,omitempty"`
+	User    string         `json:"user,omitempty"`
+	Device  string         `json:"device,omitempty"`
+	Targets []LiveTarget   `json:"targets,omitempty"`
 }
 
 type liveRecord struct {
@@ -152,6 +155,7 @@ func (r *Router) recordLive(p telemetry.Payload) uint64 {
 	}
 	e := liveEntry(p.Signal, p.Headers)
 	e.Status, e.Items, e.Agents, e.Token = LiveAccepted, p.Items(), p.AgentCounts(), p.TokenName
+	e.Names = p.Names(liveNames)
 	return r.live.add(e)
 }
 
