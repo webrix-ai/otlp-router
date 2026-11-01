@@ -11,6 +11,7 @@ data:
       otlpHttp: ":4318"
       admin: ":8080"
     publicUrl: {{ .Values.publicUrl | quote }}
+    peers: "{{ include "otlp-router.fullname" . }}-peers.{{ .Release.Namespace }}.svc:8080"
     auth:
       admin:
         username: {{ .Values.auth.admin.username | quote }}

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -47,6 +48,7 @@ func clearRouterEnv(t *testing.T) {
 		"OTLP_ROUTER_ADMIN_PASSWORD_HASH", "OTLP_ROUTER_SESSION_SECRET", "OTLP_ROUTER_INGEST_TOKENS",
 		"OTLP_ROUTER_STORE", "OTLP_ROUTER_STORE_PATH", "OTLP_ROUTER_WILLOW_ORG",
 		"OTLP_ROUTER_WILLOW_REGION", "OTLP_ROUTER_WILLOW_CONNECT_URL", "WILLOW_OTLP_TOKEN",
+		"OTLP_ROUTER_PEERS",
 	} {
 		t.Setenv(name, "")
 	}
@@ -78,6 +80,27 @@ func TestLoadFromEnvOnly(t *testing.T) {
 	}
 	if len(cfg.Targets) != 0 {
 		t.Fatalf("no target should be seeded without a Willow org: %+v", cfg.Targets)
+	}
+}
+
+func TestPeersNeedHostPortAndSessionSecret(t *testing.T) {
+	clearRouterEnv(t)
+	t.Setenv("OTLP_ROUTER_ADMIN_PASSWORD", "pw")
+	t.Setenv("OTLP_ROUTER_PEERS", "otlp-router-peers")
+	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "host:port") {
+		t.Fatalf("want a host:port error, got %v", err)
+	}
+	t.Setenv("OTLP_ROUTER_PEERS", "otlp-router-peers:8080")
+	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "sessionSecret") {
+		t.Fatalf("want a session secret error, got %v", err)
+	}
+	t.Setenv("OTLP_ROUTER_SESSION_SECRET", "s")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Peers != "otlp-router-peers:8080" {
+		t.Fatalf("peers not read from env: %q", cfg.Peers)
 	}
 }
 

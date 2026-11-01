@@ -2,6 +2,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,20 +38,35 @@ type Options struct {
 
 type server struct {
 	Options
-	auth *auth
+	auth         *auth
+	resolvePeers func(context.Context) ([]string, error)
 }
 
 func Handler(o Options) (http.Handler, error) {
+	s, err := newServer(o)
+	if err != nil {
+		return nil, err
+	}
+	return s.routes(), nil
+}
+
+func newServer(o Options) (*server, error) {
 	a, err := newAuth(o.Config.Auth)
 	if err != nil {
 		return nil, err
 	}
 	s := &server{Options: o, auth: a}
+	s.resolvePeers = s.lookupPeers
+	return s, nil
+}
+
+func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") })
 	mux.HandleFunc("GET /metrics", s.metrics)
+	mux.HandleFunc("GET /internal/stats", s.internalStats)
 
 	mux.HandleFunc("GET /api/session", s.getSession)
 	mux.HandleFunc("POST /api/login", s.login)
@@ -72,7 +88,7 @@ func Handler(o Options) (http.Handler, error) {
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) { writeError(w, http.StatusNotFound, "not found") })
 
 	mux.HandleFunc("/", s.static)
-	return securityHeaders(mux), nil
+	return securityHeaders(mux)
 }
 
 func securityHeaders(h http.Handler) http.Handler {
@@ -154,10 +170,16 @@ func (s *server) info(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (s *server) stats(w http.ResponseWriter, _ *http.Request) {
+func (s *server) stats(w http.ResponseWriter, r *http.Request) {
+	if s.Config.Peers == "" {
+		writeJSON(w, http.StatusOK, s.localStats())
+		return
+	}
+	merged, pods := s.clusterStats(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ingest":  s.Router.IngestStats(),
-		"targets": s.Router.TargetStats(),
+		"ingest":  merged.Ingest,
+		"targets": merged.Targets,
+		"pods":    pods,
 	})
 }
 

@@ -92,6 +92,8 @@ export interface Stats {
     agents: AgentStats[] | null
   }
   targets: Record<string, TargetStats>
+  // Set when the router runs as several replicas: how many the totals cover.
+  pods?: { reporting: number; total: number; error?: string }
 }
 
 export interface Preset {
