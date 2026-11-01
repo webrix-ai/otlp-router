@@ -35,6 +35,7 @@ type Router struct {
 	auth    ingestAuth
 	ingest  ingestStats
 	samples samples
+	live    *liveLog
 }
 
 func New(st store.Store, log *slog.Logger) *Router {
@@ -45,6 +46,7 @@ func New(st store.Store, log *slog.Logger) *Router {
 		auth:      ingestAuth{byHash: map[string]config.IngestToken{}},
 		ingest:    ingestStats{agents: map[string]*AgentStats{}},
 		samples:   samples{bySignal: map[telemetry.Signal][]telemetry.Payload{}},
+		live:      newLiveLog(),
 	}
 }
 
@@ -109,7 +111,7 @@ func (r *Router) apply(s store.State, version string) {
 			next[t.ID] = prev
 			continue
 		}
-		e, err := exporter.New(t, r.log)
+		e, err := exporter.New(t, r.log, r.reportLive)
 		if err != nil {
 			r.log.Error("target not started", "target", t.ID, "err", err)
 			continue
@@ -141,6 +143,7 @@ func sameTarget(a, b config.Target) bool {
 func (r *Router) Route(p telemetry.Payload) {
 	r.ingest.record(p)
 	r.samples.add(p)
+	p.LiveID = r.recordLive(p)
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for _, e := range r.exporters {

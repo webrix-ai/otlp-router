@@ -65,6 +65,10 @@ type Payload struct {
 	// Headers are the inbound request headers (lowercased keys) a target may
 	// pass through, e.g. x-device-id. Credentials are never included.
 	Headers map[string]string
+	// TokenName names the ingest token the agent sent, never the token itself.
+	TokenName string
+	// LiveID links the payload to its entry in the live view, 0 when off.
+	LiveID uint64
 }
 
 func FromTraces(td ptrace.Traces) Payload    { return Payload{Signal: Traces, Traces: td} }
@@ -128,7 +132,7 @@ func (p Payload) Encode(enc Encoding) ([]byte, error) {
 
 // Clone deep-copies the payload so each target can filter independently.
 func (p Payload) Clone() Payload {
-	c := Payload{Signal: p.Signal, Headers: p.Headers}
+	c := Payload{Signal: p.Signal, Headers: p.Headers, TokenName: p.TokenName, LiveID: p.LiveID}
 	switch p.Signal {
 	case Traces:
 		c.Traces = ptrace.NewTraces()

@@ -29,18 +29,21 @@ const maxBodyBytes = 32 << 20
 
 type Router interface {
 	Route(p telemetry.Payload)
+	// Rejected records a request that was turned away.
+	Rejected(sig telemetry.Signal, reason string, headers map[string]string)
 }
 
 type Server struct {
 	Router Router
-	// Authorize checks the bearer token an agent sent. Nil accepts everything.
-	Authorize func(token string) bool
+	// Authorize checks the bearer token an agent sent and names it. Nil
+	// accepts everything.
+	Authorize func(token string) (name string, ok bool)
 	Log       *slog.Logger
 }
 
-func (s *Server) authorized(header string) bool {
+func (s *Server) authorized(header string) (string, bool) {
 	if s.Authorize == nil {
-		return true
+		return "", true
 	}
 	token, ok := strings.CutPrefix(header, "Bearer ")
 	if !ok {
@@ -48,6 +51,11 @@ func (s *Server) authorized(header string) bool {
 	}
 	return s.Authorize(strings.TrimSpace(token))
 }
+
+const (
+	reasonUnauthorized = "missing or invalid ingest token"
+	reasonContentType  = "unsupported content type"
+)
 
 // passthrough keeps the inbound x-* headers targets may forward, e.g.
 // x-device-id. Credentials never start with x- in OTLP exporters.
@@ -73,13 +81,24 @@ func (s *Server) HTTPHandler() http.Handler {
 	return mux
 }
 
+func httpHeaders(r *http.Request) map[string]string {
+	return passthrough(func(yield func(k, v string)) {
+		for k := range r.Header {
+			yield(k, r.Header.Get(k))
+		}
+	})
+}
+
 func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, sig telemetry.Signal) {
-	if !s.authorized(r.Header.Get("Authorization")) {
+	tokenName, ok := s.authorized(r.Header.Get("Authorization"))
+	if !ok {
+		s.Router.Rejected(sig, reasonUnauthorized, httpHeaders(r))
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	enc, ok := telemetry.EncodingFromContentType(r.Header.Get("Content-Type"))
 	if !ok {
+		s.Router.Rejected(sig, reasonContentType+" "+r.Header.Get("Content-Type"), httpHeaders(r))
 		http.Error(w, "unsupported content type, use application/x-protobuf or application/json", http.StatusUnsupportedMediaType)
 		return
 	}
@@ -87,6 +106,7 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, sig telemetry
 	if strings.EqualFold(r.Header.Get("Content-Encoding"), "gzip") {
 		zr, err := gzip.NewReader(body)
 		if err != nil {
+			s.Router.Rejected(sig, "invalid gzip body", httpHeaders(r))
 			http.Error(w, "invalid gzip body", http.StatusBadRequest)
 			return
 		}
@@ -97,23 +117,24 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, sig telemetry
 	if err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
+			s.Router.Rejected(sig, "body too large", httpHeaders(r))
 			http.Error(w, "body too large", http.StatusRequestEntityTooLarge)
 			return
 		}
+		s.Router.Rejected(sig, "read body: "+err.Error(), httpHeaders(r))
 		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	p, err := telemetry.Decode(sig, enc, raw)
 	if err != nil {
+		msg := fmt.Sprintf("invalid OTLP %s payload: %v", sig, err)
+		s.Router.Rejected(sig, msg, httpHeaders(r))
 		// 400 tells the exporter not to retry a payload that can never parse.
-		http.Error(w, fmt.Sprintf("invalid OTLP %s payload: %v", sig, err), http.StatusBadRequest)
+		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
-	p.Headers = passthrough(func(yield func(k, v string)) {
-		for k := range r.Header {
-			yield(k, r.Header.Get(k))
-		}
-	})
+	p.Headers = httpHeaders(r)
+	p.TokenName = tokenName
 	s.Router.Route(p)
 	writeHTTPResponse(w, sig, enc)
 }
@@ -157,22 +178,44 @@ func writeHTTPResponse(w http.ResponseWriter, sig telemetry.Signal, enc telemetr
 func (s *Server) GRPCServer() *grpc.Server {
 	srv := grpc.NewServer(
 		grpc.MaxRecvMsgSize(maxBodyBytes),
-		grpc.UnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {
+		grpc.UnaryInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {
 			md, _ := metadata.FromIncomingContext(ctx)
 			auth := ""
 			if v := md.Get("authorization"); len(v) > 0 {
 				auth = v[0]
 			}
-			if !s.authorized(auth) {
+			name, ok := s.authorized(auth)
+			if !ok {
+				s.Router.Rejected(grpcSignal(info.FullMethod), reasonUnauthorized, grpcHeaders(ctx))
 				return nil, status.Error(codes.Unauthenticated, "invalid or missing ingest token")
 			}
-			return h(ctx, req)
+			return h(context.WithValue(ctx, tokenNameKey{}, name), req)
 		}),
 	)
 	ptraceotlp.RegisterGRPCServer(srv, &tracesService{s: s})
 	pmetricotlp.RegisterGRPCServer(srv, &metricsService{s: s})
 	plogotlp.RegisterGRPCServer(srv, &logsService{s: s})
 	return srv
+}
+
+type tokenNameKey struct{}
+
+// grpcPayload adds what the interceptor learned about the request.
+func grpcPayload(ctx context.Context, p telemetry.Payload) telemetry.Payload {
+	p.Headers = grpcHeaders(ctx)
+	p.TokenName, _ = ctx.Value(tokenNameKey{}).(string)
+	return p
+}
+
+// grpcSignal reads the signal from a method such as
+// /opentelemetry.proto.collector.logs.v1.LogsService/Export.
+func grpcSignal(method string) telemetry.Signal {
+	for _, sig := range telemetry.AllSignals {
+		if strings.Contains(method, "."+string(sig)+".") {
+			return sig
+		}
+	}
+	return ""
 }
 
 func grpcHeaders(ctx context.Context) map[string]string {
@@ -192,8 +235,7 @@ type tracesService struct {
 }
 
 func (t *tracesService) Export(ctx context.Context, req ptraceotlp.ExportRequest) (ptraceotlp.ExportResponse, error) {
-	p := telemetry.FromTraces(req.Traces())
-	p.Headers = grpcHeaders(ctx)
+	p := grpcPayload(ctx, telemetry.FromTraces(req.Traces()))
 	t.s.Router.Route(p)
 	return ptraceotlp.NewExportResponse(), nil
 }
@@ -204,8 +246,7 @@ type metricsService struct {
 }
 
 func (m *metricsService) Export(ctx context.Context, req pmetricotlp.ExportRequest) (pmetricotlp.ExportResponse, error) {
-	p := telemetry.FromMetrics(req.Metrics())
-	p.Headers = grpcHeaders(ctx)
+	p := grpcPayload(ctx, telemetry.FromMetrics(req.Metrics()))
 	m.s.Router.Route(p)
 	return pmetricotlp.NewExportResponse(), nil
 }
@@ -216,8 +257,7 @@ type logsService struct {
 }
 
 func (l *logsService) Export(ctx context.Context, req plogotlp.ExportRequest) (plogotlp.ExportResponse, error) {
-	p := telemetry.FromLogs(req.Logs())
-	p.Headers = grpcHeaders(ctx)
+	p := grpcPayload(ctx, telemetry.FromLogs(req.Logs()))
 	l.s.Router.Route(p)
 	return plogotlp.NewExportResponse(), nil
 }

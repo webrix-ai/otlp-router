@@ -48,7 +48,7 @@ func clearRouterEnv(t *testing.T) {
 		"OTLP_ROUTER_ADMIN_PASSWORD_HASH", "OTLP_ROUTER_SESSION_SECRET", "OTLP_ROUTER_INGEST_TOKENS",
 		"OTLP_ROUTER_STORE", "OTLP_ROUTER_STORE_PATH", "OTLP_ROUTER_WILLOW_ORG",
 		"OTLP_ROUTER_WILLOW_REGION", "OTLP_ROUTER_WILLOW_CONNECT_URL", "WILLOW_OTLP_TOKEN",
-		"OTLP_ROUTER_PEERS",
+		"OTLP_ROUTER_PEERS", "OTLP_ROUTER_DISABLE_LIVE",
 	} {
 		t.Setenv(name, "")
 	}
@@ -101,6 +101,23 @@ func TestPeersNeedHostPortAndSessionSecret(t *testing.T) {
 	}
 	if cfg.Peers != "otlp-router-peers:8080" {
 		t.Fatalf("peers not read from env: %q", cfg.Peers)
+	}
+}
+
+func TestLiveIsOnUnlessDisabled(t *testing.T) {
+	clearRouterEnv(t)
+	t.Setenv("OTLP_ROUTER_ADMIN_PASSWORD", "pw")
+	cfg, err := Load("")
+	if err != nil || cfg.DisableLive {
+		t.Fatalf("live should be on by default: %v %+v", err, cfg)
+	}
+	t.Setenv("OTLP_ROUTER_DISABLE_LIVE", "true")
+	if cfg, err = Load(""); err != nil || !cfg.DisableLive {
+		t.Fatalf("OTLP_ROUTER_DISABLE_LIVE=true should turn it off: %v", err)
+	}
+	t.Setenv("OTLP_ROUTER_DISABLE_LIVE", "maybe")
+	if _, err = Load(""); err == nil {
+		t.Fatal("want an error for a value that is not a boolean")
 	}
 }
 

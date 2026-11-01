@@ -37,6 +37,9 @@ auth:
 # When true the UI can view targets but not change them, for GitOps setups.
 readOnly: false
 
+# When true the UI has no Live page and recent requests are not kept in memory.
+disableLive: false
+
 store:
   # memory | file | configmap
   type: file

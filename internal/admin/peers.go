@@ -39,9 +39,13 @@ func (s *server) localStats() podStats {
 
 func (s *server) peerToken() string { return s.auth.sign("peer-stats") }
 
+func (s *server) isPeer(r *http.Request) bool {
+	return s.Config.Peers != "" && hmac.Equal([]byte(r.Header.Get(peerHeader)), []byte(s.peerToken()))
+}
+
 // internalStats serves this replica's own counters to the other replicas.
 func (s *server) internalStats(w http.ResponseWriter, r *http.Request) {
-	if s.Config.Peers == "" || !hmac.Equal([]byte(r.Header.Get(peerHeader)), []byte(s.peerToken())) {
+	if !s.isPeer(r) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -64,6 +68,16 @@ func (s *server) lookupPeers(ctx context.Context) ([]string, error) {
 // clusterStats adds up the counters of every replica, this one included.
 // Replicas that do not answer are left out and counted in the report.
 func (s *server) clusterStats(ctx context.Context) (podStats, podsReport) {
+	got, pods := fanOut[podStats](ctx, s, "/internal/stats")
+	if len(got) == 0 {
+		return s.localStats(), pods
+	}
+	return mergeStats(got), pods
+}
+
+// fanOut asks every replica, this one included, for path. When none answers
+// it returns nothing and a report for falling back to this replica.
+func fanOut[T any](ctx context.Context, s *server, path string) ([]T, podsReport) {
 	ctx, cancel := context.WithTimeout(ctx, peerTimeout)
 	defer cancel()
 	addrs, err := s.resolvePeers(ctx)
@@ -72,18 +86,18 @@ func (s *server) clusterStats(ctx context.Context) (podStats, podsReport) {
 			err = fmt.Errorf("no addresses")
 		}
 		s.Log.Warn("peer lookup failed, showing this replica only", "peers", s.Config.Peers, "err", err)
-		return s.localStats(), podsReport{Reporting: 1, Total: 1, Error: "could not find the other replicas: " + err.Error()}
+		return nil, podsReport{Reporting: 1, Total: 1, Error: "could not find the other replicas: " + err.Error()}
 	}
 
-	results := make([]*podStats, len(addrs))
+	results := make([]*T, len(addrs))
 	var wg sync.WaitGroup
 	for i, addr := range addrs {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			p, err := s.fetchPeer(ctx, addr)
+			p, err := fetchPeer[T](ctx, s, addr, path)
 			if err != nil {
-				s.Log.Warn("peer stats failed", "addr", addr, "err", err)
+				s.Log.Warn("peer request failed", "addr", addr, "path", path, "err", err)
 				return
 			}
 			results[i] = p
@@ -91,20 +105,20 @@ func (s *server) clusterStats(ctx context.Context) (podStats, podsReport) {
 	}
 	wg.Wait()
 
-	var got []podStats
+	var got []T
 	for _, p := range results {
 		if p != nil {
 			got = append(got, *p)
 		}
 	}
 	if len(got) == 0 {
-		return s.localStats(), podsReport{Reporting: 1, Total: len(addrs), Error: "no replica answered; showing this replica only"}
+		return nil, podsReport{Reporting: 1, Total: len(addrs), Error: "no replica answered; showing this replica only"}
 	}
-	return mergeStats(got), podsReport{Reporting: len(got), Total: len(addrs)}
+	return got, podsReport{Reporting: len(got), Total: len(addrs)}
 }
 
-func (s *server) fetchPeer(ctx context.Context, addr string) (*podStats, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/internal/stats", nil)
+func fetchPeer[T any](ctx context.Context, s *server, addr, path string) (*T, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +131,7 @@ func (s *server) fetchPeer(ctx context.Context, addr string) (*podStats, error) 
 	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("status %d", res.StatusCode)
 	}
-	var p podStats
+	var p T
 	if err := json.NewDecoder(res.Body).Decode(&p); err != nil {
 		return nil, err
 	}

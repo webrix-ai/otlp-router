@@ -108,7 +108,7 @@ func TestFanOutWithPerTargetFilters(t *testing.T) {
 	}
 
 	rt.SetIngestAuth([]string{"ingest-secret"}, false)
-	in := &ingest.Server{Router: rt, Authorize: rt.AuthorizeIngest}
+	in := &ingest.Server{Router: rt, Authorize: rt.CheckIngest}
 	h := in.HTTPHandler()
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/logs", bytes.NewReader(claudeLogsProto(t)))

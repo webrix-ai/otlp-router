@@ -96,6 +96,7 @@ To send to Willow as well, add:
 | `OTLP_ROUTER_WILLOW_CONNECT_URL`  | On-prem or custom-domain Willow; implies `custom` when no org is set          |
 | `WILLOW_OTLP_TOKEN`               | Your org's Willow OTLP token, required with the Willow variables above        |
 | `OTLP_ROUTER_PEERS`               | Only for several replicas: `host:port` resolving to all of them, e.g. a Compose service name with `:8080`. The UI then adds up their stats. Needs the same `OTLP_ROUTER_SESSION_SECRET` on every replica |
+| `OTLP_ROUTER_DISABLE_LIVE`        | `true` hides the UI's Live page of recent requests and keeps none in memory   |
 
 The Willow target is only added when the store has no targets yet; after that, edit it in the UI.
 
@@ -197,6 +198,12 @@ managed outside the UI, the store, and the targets to seed on first start. See [
 Set `readOnly: true` to manage targets and tokens only through config (GitOps). The UI then shows them but cannot
 change them.
 
+The UI's Live page lists the latest requests agents sent: when, which agent, user, device and token, and what each
+target did with them (sent, filtered, retrying, failed with the error), plus requests that were rejected. Each replica
+keeps its last 1,000 requests in memory, and with `peers` set the page shows every replica's. No database is needed.
+It is on by default; set `disableLive: true` (Helm `live.enabled: false`, or `OTLP_ROUTER_DISABLE_LIVE=true`) to hide
+the page and keep nothing.
+
 ## Security
 
 - The UI and API need the admin login. Sessions are HTTP-only, `SameSite=Strict` cookies signed with
@@ -206,6 +213,9 @@ change them.
 - Expose the UI only on an internal network. The chart has separate ingresses for OTLP and the UI.
 - The router keeps the last few payloads per signal in memory for the filter preview. They can contain prompts, are
   shown only to the admin, and are never written to disk.
+- The Live page keeps request details only, never the telemetry: user email and device id from the agent's
+  headers, the ingest token's name, item counts and delivery errors. Replicas share them with each other only when
+  they present a token derived from `auth.sessionSecret`.
 - `/metrics` (Prometheus) is unauthenticated and exposes counters and target ids only.
 
 ## Development

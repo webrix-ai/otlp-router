@@ -93,7 +93,39 @@ export interface Stats {
   }
   targets: Record<string, TargetStats>
   // Set when the router runs as several replicas: how many the totals cover.
-  pods?: { reporting: number; total: number; error?: string }
+  pods?: PodsReport
+}
+
+export type PodsReport = { reporting: number; total: number; error?: string }
+
+export type LiveTargetStatus = "filtered" | "dropped" | "queued" | "retrying" | "sent" | "failed"
+
+export interface LiveTarget {
+  id: string
+  status: LiveTargetStatus
+  items: number
+  error?: string
+}
+
+/** One ingest request: who sent it and where it went. Never the telemetry itself. */
+export interface LiveEntry {
+  id: string
+  time: number
+  updatedAt: number
+  signal: Signal | ""
+  status: "accepted" | "rejected"
+  error?: string
+  items: number
+  agents?: Record<string, number>
+  token?: string
+  user?: string
+  device?: string
+  targets?: LiveTarget[]
+}
+
+export interface LiveResponse {
+  entries: LiveEntry[]
+  pods?: PodsReport
 }
 
 export interface Preset {
@@ -108,6 +140,7 @@ export interface Info {
   publicUrl: string
   ingestAuth: boolean
   readOnly: boolean
+  live: boolean
   store: string
   listen: { OTLPGRPC: string; OTLPHTTP: string; Admin: string }
   presets: Preset[]
@@ -179,6 +212,7 @@ export const api = {
   logout: () => request("POST", "/api/logout", {}),
   info: () => request<Info>("GET", "/api/info"),
   stats: () => request<Stats>("GET", "/api/stats"),
+  live: (since: number) => request<LiveResponse>("GET", `/api/live?since=${since}`),
   targets: () => request<TargetsResponse>("GET", "/api/targets"),
   createTarget: (target: Target, version: string) =>
     request<TargetsResponse>("POST", "/api/targets", { target, version }),

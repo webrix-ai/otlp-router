@@ -67,6 +67,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") })
 	mux.HandleFunc("GET /metrics", s.metrics)
 	mux.HandleFunc("GET /internal/stats", s.internalStats)
+	mux.HandleFunc("GET /internal/live", s.internalLive)
 
 	mux.HandleFunc("GET /api/session", s.getSession)
 	mux.HandleFunc("POST /api/login", s.login)
@@ -74,6 +75,7 @@ func (s *server) routes() http.Handler {
 
 	mux.Handle("GET /api/info", s.authed(s.info))
 	mux.Handle("GET /api/stats", s.authed(s.stats))
+	mux.Handle("GET /api/live", s.authed(s.live))
 	mux.Handle("GET /api/targets", s.authed(s.listTargets))
 	mux.Handle("POST /api/targets", s.mutating(s.createTarget))
 	mux.Handle("PUT /api/targets/{id}", s.mutating(s.updateTarget))
@@ -164,6 +166,7 @@ func (s *server) info(w http.ResponseWriter, _ *http.Request) {
 		"publicUrl":  s.Config.PublicURL,
 		"ingestAuth": !s.Config.Auth.AllowUnauthenticatedIngest,
 		"readOnly":   s.Config.ReadOnly,
+		"live":       s.Router.LiveEnabled(),
 		"store":      s.Store.Kind(),
 		"listen":     s.Config.Listen,
 		"presets":    filter.Presets,

@@ -73,6 +73,9 @@ func run(configPath string, log *slog.Logger) error {
 
 	rt := router.New(st, log)
 	rt.SetIngestAuth(cfg.Auth.IngestTokens, cfg.Auth.AllowUnauthenticatedIngest)
+	if cfg.DisableLive {
+		rt.DisableLive()
+	}
 	if err := rt.Init(ctx, cfg.Targets); err != nil {
 		return fmt.Errorf("load targets: %w", err)
 	}
@@ -84,7 +87,7 @@ func run(configPath string, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	in := &ingest.Server{Router: rt, Authorize: rt.AuthorizeIngest, Log: log}
+	in := &ingest.Server{Router: rt, Authorize: rt.CheckIngest, Log: log}
 	if cfg.Auth.AllowUnauthenticatedIngest {
 		log.Warn("ingest auth is disabled; anyone who can reach the OTLP ports can send telemetry")
 	} else if len(cfg.Auth.IngestTokens) == 0 && len(rt.IngestAuth().Tokens) == 0 {

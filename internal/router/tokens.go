@@ -51,14 +51,18 @@ func (a *ingestAuth) list() []config.IngestToken {
 	return slices.Clone(a.tokens)
 }
 
-func (a *ingestAuth) authorize(token string, now time.Time) bool {
+// ConfigTokenName labels requests sent with a token from the config file.
+const ConfigTokenName = "config file"
+
+// authorize returns the name of the matching token, empty when ingest is open.
+func (a *ingestAuth) authorize(token string, now time.Time) (string, bool) {
 	if a.allowOpen {
-		return true
+		return "", true
 	}
 	if token != "" {
 		for _, s := range a.static {
 			if subtle.ConstantTimeCompare([]byte(token), []byte(s)) == 1 {
-				return true
+				return ConfigTokenName, true
 			}
 		}
 		a.mu.RLock()
@@ -67,11 +71,11 @@ func (a *ingestAuth) authorize(token string, now time.Time) bool {
 		if ok && !t.Expired(now) {
 			v, _ := a.lastUsed.LoadOrStore(t.ID, &atomic.Int64{})
 			v.(*atomic.Int64).Store(now.UnixMilli())
-			return true
+			return t.Name, true
 		}
 	}
 	a.rejected.Add(1)
-	return false
+	return "", false
 }
 
 // SetIngestAuth sets the operator-owned ingest auth from the config file. Call
@@ -82,6 +86,12 @@ func (r *Router) SetIngestAuth(static []string, allowOpen bool) {
 
 // AuthorizeIngest reports whether an agent may send with this bearer token.
 func (r *Router) AuthorizeIngest(token string) bool {
+	_, ok := r.auth.authorize(token, time.Now())
+	return ok
+}
+
+// CheckIngest is AuthorizeIngest that also names the token that matched.
+func (r *Router) CheckIngest(token string) (string, bool) {
 	return r.auth.authorize(token, time.Now())
 }
 
