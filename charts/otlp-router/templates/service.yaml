@@ -23,3 +23,20 @@ spec:
     - name: admin
       port: {{ .Values.service.adminPort }}
       targetPort: admin
+---
+# Resolves to every ready replica, so the one serving the UI can add up the
+# stats of all of them.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "otlp-router.fullname" . }}-peers
+  labels:
+    {{- include "otlp-router.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "otlp-router.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: admin
+      port: 8080
+      targetPort: admin

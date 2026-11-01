@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"regexp"
@@ -19,12 +20,16 @@ import (
 // (Helm values, a mounted file or OTLP_ROUTER_* variables); the UI cannot
 // change it.
 type Config struct {
-	Listen    Listen   `yaml:"listen"`
-	PublicURL string   `yaml:"publicUrl"`
-	Auth      Auth     `yaml:"auth"`
-	ReadOnly  bool     `yaml:"readOnly"`
-	Store     Store    `yaml:"store"`
-	Targets   []Target `yaml:"targets"`
+	Listen    Listen `yaml:"listen"`
+	PublicURL string `yaml:"publicUrl"`
+	Auth      Auth   `yaml:"auth"`
+	ReadOnly  bool   `yaml:"readOnly"`
+	Store     Store  `yaml:"store"`
+	// Peers is host:port of a DNS name that resolves to every replica's admin
+	// listener, e.g. a headless Service. When set, the UI's stats add up all
+	// replicas instead of showing only the one that served the request.
+	Peers   string   `yaml:"peers"`
+	Targets []Target `yaml:"targets"`
 }
 
 type Listen struct {
@@ -166,6 +171,7 @@ func Load(path string) (*Config, error) {
 	cfg.Auth.Admin.Password = ExpandEnv(cfg.Auth.Admin.Password)
 	cfg.Auth.Admin.PasswordHash = ExpandEnv(cfg.Auth.Admin.PasswordHash)
 	cfg.Auth.SessionSecret = ExpandEnv(cfg.Auth.SessionSecret)
+	cfg.Peers = ExpandEnv(cfg.Peers)
 	var tokens []string
 	for _, t := range cfg.Auth.IngestTokens {
 		tokens = append(tokens, strings.Split(ExpandEnv(t), ",")...)
@@ -205,6 +211,7 @@ func (c *Config) applyEnv() error {
 		c.Store.Type = StoreType(os.Getenv("OTLP_ROUTER_STORE"))
 	}
 	setFromEnv(&c.Store.Path, "OTLP_ROUTER_STORE_PATH")
+	setFromEnv(&c.Peers, "OTLP_ROUTER_PEERS")
 
 	org := strings.TrimSpace(os.Getenv("OTLP_ROUTER_WILLOW_ORG"))
 	connectURL := strings.TrimSpace(os.Getenv("OTLP_ROUTER_WILLOW_CONNECT_URL"))
@@ -281,6 +288,15 @@ func (c *Config) validate() error {
 		}
 	default:
 		return fmt.Errorf("unknown store.type %q", c.Store.Type)
+	}
+	if c.Peers != "" {
+		if _, _, err := net.SplitHostPort(c.Peers); err != nil {
+			return fmt.Errorf("peers must be host:port, e.g. otlp-router-peers:8080: %w", err)
+		}
+		// Replicas prove to each other that they are peers with it.
+		if c.Auth.SessionSecret == "" {
+			return fmt.Errorf("auth.sessionSecret is required with peers")
+		}
 	}
 	_, err := NormalizeTargets(c.Targets)
 	return err

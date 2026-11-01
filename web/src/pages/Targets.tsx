@@ -4,7 +4,7 @@ import { api, formatNumber, timeAgo, SIGNALS, willowEndpoint, type Target } from
 import { agentName } from "../agents"
 import { useRouterData } from "../App"
 import { ErrorBanner, PageHeader, StatusDot, Toggle } from "../ui"
-import { targetHealth } from "./Overview"
+import { PodsNotice, targetHealth } from "./Overview"
 import TargetEditor, { newTarget } from "./TargetEditor"
 
 const TYPE_LABEL = { willow: "Willow", otlphttp: "OTLP/HTTP", otlpgrpc: "OTLP/gRPC" }
@@ -40,6 +40,7 @@ export default function Targets() {
         }
       />
       <ErrorBanner message={error} />
+      <PodsNotice pods={stats?.pods} />
 
       {loaded && !hasWillow && !readOnly && (
         <button

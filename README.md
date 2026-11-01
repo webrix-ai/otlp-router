@@ -95,6 +95,7 @@ To send to Willow as well, add:
 | `OTLP_ROUTER_WILLOW_REGION`       | `us` (default), `eu`, or `custom`                                             |
 | `OTLP_ROUTER_WILLOW_CONNECT_URL`  | On-prem or custom-domain Willow; implies `custom` when no org is set          |
 | `WILLOW_OTLP_TOKEN`               | Your org's Willow OTLP token, required with the Willow variables above        |
+| `OTLP_ROUTER_PEERS`               | Only for several replicas: `host:port` resolving to all of them, e.g. a Compose service name with `:8080`. The UI then adds up their stats. Needs the same `OTLP_ROUTER_SESSION_SECRET` on every replica |
 
 The Willow target is only added when the store has no targets yet; after that, edit it in the UI.
 

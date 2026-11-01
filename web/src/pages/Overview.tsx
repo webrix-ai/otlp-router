@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { ArrowRight, Inbox } from "lucide-react"
-import { SIGNALS, formatNumber, timeAgo, type Signal, type Target, type TargetStats } from "../api"
+import { SIGNALS, formatNumber, timeAgo, type Signal, type Stats, type Target, type TargetStats } from "../api"
 import { agentName } from "../agents"
 import { useRouterData } from "../App"
 import { PageHeader, StatusDot, type Health } from "../ui"
@@ -32,6 +32,16 @@ function useRates(items?: Record<Signal, number>): Record<Signal, number> {
   return rates
 }
 
+// PodsNotice warns when the totals leave out replicas that did not answer.
+export function PodsNotice({ pods }: { pods?: Stats["pods"] }) {
+  if (!pods || (!pods.error && pods.reporting >= pods.total)) return null
+  return (
+    <div className="mb-4 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">
+      {pods.error ?? `Counting ${pods.reporting} of ${pods.total} replicas; the others did not answer.`}
+    </div>
+  )
+}
+
 const SIGNAL_LABEL: Record<Signal, string> = { traces: "Spans", metrics: "Data points", logs: "Log records" }
 
 export default function Overview() {
@@ -43,6 +53,7 @@ export default function Overview() {
   return (
     <>
       <PageHeader title="Overview" description="Telemetry arriving at this router and where it goes." />
+      <PodsNotice pods={stats?.pods} />
 
       <div className="grid gap-4 md:grid-cols-4">
         {SIGNALS.map((s) => (
