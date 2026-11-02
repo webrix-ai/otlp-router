@@ -28,6 +28,10 @@
   --sidebar-active-fg: #fffdf7;
   --logo-bg: #14392d;
   --overlay: rgb(20 57 45 / 0.35);
+  --json-key: #2e6041;
+  --json-string: #a0522d;
+  --json-number: #1d5f9e;
+  --json-literal: #7c3aed;
   color-scheme: light;
 }
 
@@ -54,6 +58,10 @@
   --sidebar-active: #1e4d3a;
   --sidebar-active-fg: #fffdf7;
   --overlay: rgb(2 8 5 / 0.7);
+  --json-key: #4abb85;
+  --json-string: #f2b880;
+  --json-number: #7cc4fa;
+  --json-literal: #d6a4ff;
   color-scheme: dark;
 }
 
@@ -82,6 +90,10 @@
   --color-sidebar-active-fg: var(--sidebar-active-fg);
   --color-logo-bg: var(--logo-bg);
   --color-overlay: var(--overlay);
+  --color-json-key: var(--json-key);
+  --color-json-string: var(--json-string);
+  --color-json-number: var(--json-number);
+  --color-json-literal: var(--json-literal);
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
