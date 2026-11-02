@@ -16,6 +16,7 @@ import {
 } from "../api"
 import { KNOWN_AGENT_SLUGS, agentName } from "../agents"
 import { useRouterData } from "../App"
+import { JsonViewer } from "../json"
 import { ErrorBanner, Modal, Toggle } from "../ui"
 
 export function newTarget(type: TargetType): Target {
@@ -523,19 +524,10 @@ function Preview({ target }: { target: Target }) {
       {result && !result.available && <p className="text-xs text-faint">No {signal} received yet. Send some telemetry first.</p>}
       {result?.available && (
         <div className="grid gap-2">
-          <JsonPane title="Received" value={result.before} />
-          <JsonPane title="Sent to this target" value={result.after} highlight />
+          <JsonViewer title="Received" value={result.before} />
+          <JsonViewer title="Sent to this target" value={result.after} highlight />
         </div>
       )}
     </Section>
-  )
-}
-
-function JsonPane({ title, value, highlight }: { title: string; value: unknown; highlight?: boolean }) {
-  return (
-    <div>
-      <div className={`mb-1 text-[11px] tracking-wide uppercase ${highlight ? "text-primary" : "text-faint"}`}>{title}</div>
-      <pre className="code max-h-64 overflow-auto">{JSON.stringify(value, null, 2)}</pre>
-    </div>
   )
 }
