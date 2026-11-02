@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/webrix-ai/otlp-router/internal/config"
-	"github.com/webrix-ai/otlp-router/internal/filter"
-	"github.com/webrix-ai/otlp-router/internal/telemetry"
+	"github.com/withwillowai/otlp-router/internal/config"
+	"github.com/withwillowai/otlp-router/internal/filter"
+	"github.com/withwillowai/otlp-router/internal/telemetry"
 )
 
 const (

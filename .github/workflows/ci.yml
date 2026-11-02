@@ -57,8 +57,8 @@ jobs:
           cluster_name: otlp-router
       - name: Build and load image
         run: |
-          docker build -t ghcr.io/webrix-ai/otlp-router:e2e .
-          kind load docker-image ghcr.io/webrix-ai/otlp-router:e2e --name otlp-router
+          docker build -t ghcr.io/withwillowai/otlp-router:e2e .
+          kind load docker-image ghcr.io/withwillowai/otlp-router:e2e --name otlp-router
       - name: Install a sink and a router that forwards to it
         run: |
           helm install sink charts/otlp-router -n otel --create-namespace --set image.tag=e2e --set replicaCount=1 --set podDisruptionBudget.enabled=false \

@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/webrix-ai/otlp-router/internal/config"
-	"github.com/webrix-ai/otlp-router/internal/exporter"
-	"github.com/webrix-ai/otlp-router/internal/filter"
-	"github.com/webrix-ai/otlp-router/internal/ingest"
-	"github.com/webrix-ai/otlp-router/internal/router"
-	"github.com/webrix-ai/otlp-router/internal/store"
+	"github.com/withwillowai/otlp-router/internal/config"
+	"github.com/withwillowai/otlp-router/internal/exporter"
+	"github.com/withwillowai/otlp-router/internal/filter"
+	"github.com/withwillowai/otlp-router/internal/ingest"
+	"github.com/withwillowai/otlp-router/internal/router"
+	"github.com/withwillowai/otlp-router/internal/store"
 )
 
 func TestLiveShowsWhereEachRequestWent(t *testing.T) {

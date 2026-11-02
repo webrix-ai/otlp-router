@@ -14,12 +14,12 @@ import (
 
 	"go.opentelemetry.io/collector/pdata/plog"
 
-	"github.com/webrix-ai/otlp-router/internal/config"
-	"github.com/webrix-ai/otlp-router/internal/filter"
-	"github.com/webrix-ai/otlp-router/internal/ingest"
-	"github.com/webrix-ai/otlp-router/internal/router"
-	"github.com/webrix-ai/otlp-router/internal/store"
-	"github.com/webrix-ai/otlp-router/internal/telemetry"
+	"github.com/withwillowai/otlp-router/internal/config"
+	"github.com/withwillowai/otlp-router/internal/filter"
+	"github.com/withwillowai/otlp-router/internal/ingest"
+	"github.com/withwillowai/otlp-router/internal/router"
+	"github.com/withwillowai/otlp-router/internal/store"
+	"github.com/withwillowai/otlp-router/internal/telemetry"
 )
 
 type received struct {

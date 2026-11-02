@@ -3,7 +3,7 @@ package router
 import (
 	"testing"
 
-	"github.com/webrix-ai/otlp-router/internal/exporter"
+	"github.com/withwillowai/otlp-router/internal/exporter"
 )
 
 func TestLiveRingKeepsTheNewest(t *testing.T) {

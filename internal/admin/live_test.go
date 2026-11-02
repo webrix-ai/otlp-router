@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/webrix-ai/otlp-router/internal/router"
-	"github.com/webrix-ai/otlp-router/internal/telemetry"
+	"github.com/withwillowai/otlp-router/internal/router"
+	"github.com/withwillowai/otlp-router/internal/telemetry"
 )
 
 func getLive(t *testing.T, s *server, path string) (int, liveResponse) {

@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/webrix-ai/otlp-router/internal/config"
-	"github.com/webrix-ai/otlp-router/internal/exporter"
-	"github.com/webrix-ai/otlp-router/internal/router"
-	"github.com/webrix-ai/otlp-router/internal/store"
+	"github.com/withwillowai/otlp-router/internal/config"
+	"github.com/withwillowai/otlp-router/internal/exporter"
+	"github.com/withwillowai/otlp-router/internal/router"
+	"github.com/withwillowai/otlp-router/internal/store"
 )
 
 func peerServer(t *testing.T) *server {

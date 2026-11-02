@@ -14,7 +14,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/webrix-ai/otlp-router/internal/filter"
+	"github.com/withwillowai/otlp-router/internal/filter"
 )
 
 // Config is read once at startup. Everything here is owned by the operator

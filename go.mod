@@ -1,4 +1,4 @@
-module github.com/webrix-ai/otlp-router
+module github.com/withwillowai/otlp-router
 
 go 1.26.4
 
