@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/webrix-ai/otlp-router/internal/router"
-	"github.com/webrix-ai/otlp-router/internal/store"
+	"github.com/withwillowai/otlp-router/internal/router"
+	"github.com/withwillowai/otlp-router/internal/store"
 )
 
 func newRouter(t *testing.T, st store.Store) *router.Router {

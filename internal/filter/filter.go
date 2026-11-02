@@ -13,7 +13,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 
-	"github.com/webrix-ai/otlp-router/internal/telemetry"
+	"github.com/withwillowai/otlp-router/internal/telemetry"
 )
 
 type RuleType string

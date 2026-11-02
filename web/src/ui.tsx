@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { Check, Copy, Moon, Sun, X } from "lucide-react"
 
-export const GITHUB_URL = "https://github.com/webrix-ai/otlp-router"
+export const GITHUB_URL = "https://github.com/withwillowai/otlp-router"
 export const WILLOW_URL = "https://withwillow.ai"
 
 export function GithubIcon({ className }: { className?: string }) {

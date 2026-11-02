@@ -7,7 +7,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 
-	"github.com/webrix-ai/otlp-router/internal/telemetry"
+	"github.com/withwillowai/otlp-router/internal/telemetry"
 )
 
 // claudeLogs mimics Claude Code's log export: one user_prompt and one

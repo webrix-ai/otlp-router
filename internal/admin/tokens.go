@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/webrix-ai/otlp-router/internal/config"
-	"github.com/webrix-ai/otlp-router/internal/router"
+	"github.com/withwillowai/otlp-router/internal/config"
+	"github.com/withwillowai/otlp-router/internal/router"
 )
 
 type tokenView struct {

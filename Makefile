@@ -1,5 +1,5 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-IMAGE   ?= ghcr.io/webrix-ai/otlp-router
+IMAGE   ?= ghcr.io/withwillowai/otlp-router
 
 .PHONY: all ui build test lint run dev docker chart-lint sample
 

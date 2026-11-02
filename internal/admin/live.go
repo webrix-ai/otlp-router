@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/webrix-ai/otlp-router/internal/router"
+	"github.com/withwillowai/otlp-router/internal/router"
 )
 
 type liveResponse struct {

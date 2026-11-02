@@ -12,8 +12,8 @@ import (
 
 	"go.opentelemetry.io/collector/pdata/plog"
 
-	"github.com/webrix-ai/otlp-router/internal/config"
-	"github.com/webrix-ai/otlp-router/internal/telemetry"
+	"github.com/withwillowai/otlp-router/internal/config"
+	"github.com/withwillowai/otlp-router/internal/telemetry"
 )
 
 type httpSender struct {

@@ -1,5 +1,5 @@
 image:
-  repository: ghcr.io/webrix-ai/otlp-router
+  repository: ghcr.io/withwillowai/otlp-router
   # Defaults to the chart's appVersion.
   tag: ""
   pullPolicy: IfNotPresent

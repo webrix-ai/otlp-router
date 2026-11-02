@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/webrix-ai/otlp-router/internal/exporter"
-	"github.com/webrix-ai/otlp-router/internal/router"
+	"github.com/withwillowai/otlp-router/internal/exporter"
+	"github.com/withwillowai/otlp-router/internal/router"
 )
 
 const (

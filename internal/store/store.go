@@ -11,7 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/webrix-ai/otlp-router/internal/config"
+	"github.com/withwillowai/otlp-router/internal/config"
 )
 
 // ErrConflict means another replica or user saved since the caller's version.

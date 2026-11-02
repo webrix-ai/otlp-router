@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/webrix-ai/otlp-router/actions/workflows/ci.yml"><img src="https://github.com/webrix-ai/otlp-router/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/withwillowai/otlp-router/actions/workflows/ci.yml"><img src="https://github.com/withwillowai/otlp-router/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-c5ff59" alt="Apache-2.0" /></a>
 </p>
 
@@ -37,7 +37,7 @@ destination must not see.
 ## Install
 
 ```bash
-helm install otlp-router oci://ghcr.io/webrix-ai/charts/otlp-router \
+helm install otlp-router oci://ghcr.io/withwillowai/charts/otlp-router \
   --namespace observability --create-namespace
 ```
 
@@ -53,7 +53,7 @@ Then create an ingest token on the **Tokens** page. Until one exists, the router
 To send to Willow as well:
 
 ```bash
-helm upgrade --install otlp-router oci://ghcr.io/webrix-ai/charts/otlp-router -n observability \
+helm upgrade --install otlp-router oci://ghcr.io/withwillowai/charts/otlp-router -n observability \
   --set willow.enabled=true --set willow.org=acme --set willow.token="$WILLOW_OTLP_TOKEN"
 ```
 
@@ -72,7 +72,7 @@ docker run -d --name otlp-router -p 4317:4317 -p 4318:4318 -p 8080:8080 \
   -e OTLP_ROUTER_ADMIN_PASSWORD=change-me \
   -e OTLP_ROUTER_SESSION_SECRET="$(openssl rand -hex 32)" \
   -v otlp-router:/data \
-  ghcr.io/webrix-ai/otlp-router
+  ghcr.io/withwillowai/otlp-router
 ```
 
 Open http://localhost:8080, sign in as `admin`, and create an ingest token on the **Tokens** page. Targets and tokens

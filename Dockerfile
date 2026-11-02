@@ -20,7 +20,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
  && mkdir -p /out/data
 
 FROM gcr.io/distroless/static-debian12:nonroot
-LABEL org.opencontainers.image.source="https://github.com/webrix-ai/otlp-router" \
+LABEL org.opencontainers.image.source="https://github.com/withwillowai/otlp-router" \
       org.opencontainers.image.description="Open source OTLP router for AI agents, by Willow" \
       org.opencontainers.image.licenses="Apache-2.0"
 COPY --from=build /out/otlp-router /otlp-router
