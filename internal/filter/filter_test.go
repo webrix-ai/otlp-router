@@ -136,11 +136,3 @@ func TestCompileErrors(t *testing.T) {
 		}
 	}
 }
-
-func TestPresetsCompile(t *testing.T) {
-	for _, p := range Presets {
-		if _, err := Compile(p.Rules); err != nil {
-			t.Errorf("preset %s: %v", p.ID, err)
-		}
-	}
-}

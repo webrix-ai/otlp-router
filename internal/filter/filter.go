@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -26,6 +27,8 @@ const (
 	DropSpans      RuleType = "drop_spans"
 	DropMetrics    RuleType = "drop_metrics"
 	Redact         RuleType = "redact"
+	DropKnown      RuleType = "drop_known"
+	HashKnown      RuleType = "hash_known"
 )
 
 const Masked = "[REDACTED]"
@@ -33,27 +36,41 @@ const Masked = "[REDACTED]"
 // Rule is one filter step. Which fields apply depends on Type:
 //   - drop/mask/hash_attributes: Keys (globs), Level, Salt (hash only)
 //   - drop_log_events, drop_spans, drop_metrics: Names (globs)
-//   - redact: Patterns (regexes) and/or Builtins (common secret formats)
+//   - redact: Patterns (regexes), Secrets (SecretPatterns ids) and/or
+//     Builtins (every secret pattern)
+//   - drop_known: Categories (see KnownCategories)
+//   - hash_known: Categories that are hashable, Salt
 type Rule struct {
-	Type     RuleType `yaml:"type" json:"type"`
-	Keys     []string `yaml:"keys,omitempty" json:"keys,omitempty"`
-	Names    []string `yaml:"names,omitempty" json:"names,omitempty"`
-	Patterns []string `yaml:"patterns,omitempty" json:"patterns,omitempty"`
-	Builtins bool     `yaml:"builtins,omitempty" json:"builtins,omitempty"`
+	Type       RuleType `yaml:"type" json:"type"`
+	Keys       []string `yaml:"keys,omitempty" json:"keys,omitempty"`
+	Names      []string `yaml:"names,omitempty" json:"names,omitempty"`
+	Patterns   []string `yaml:"patterns,omitempty" json:"patterns,omitempty"`
+	Secrets    []string `yaml:"secrets,omitempty" json:"secrets,omitempty"`
+	Categories []string `yaml:"categories,omitempty" json:"categories,omitempty"`
+	Builtins   bool     `yaml:"builtins,omitempty" json:"builtins,omitempty"`
 	// Level limits attribute rules to "resource" or "record"; empty means both.
 	Level string `yaml:"level,omitempty" json:"level,omitempty"`
 	Salt  string `yaml:"salt,omitempty" json:"salt,omitempty"`
 }
 
-// BuiltinSecretPatterns are applied by redact rules with Builtins set.
-var BuiltinSecretPatterns = []string{
-	`AKIA[0-9A-Z]{16}`,
-	`(?i)bearer\s+[a-z0-9._~+/=-]{16,}`,
-	`eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`,
-	`sk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}`,
-	`gh[pousr]_[A-Za-z0-9]{36,}`,
-	`xox[abprs]-[A-Za-z0-9-]{10,}`,
-	`-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----`,
+// SecretPattern is a common secret format redact rules can replace.
+type SecretPattern struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Pattern string `json:"pattern"`
+}
+
+var SecretPatterns = []SecretPattern{
+	{ID: "aws_access_key", Name: "AWS access keys", Pattern: `AKIA[0-9A-Z]{16}`},
+	{ID: "bearer_token", Name: "Bearer tokens", Pattern: `(?i)bearer\s+[a-z0-9._~+/=-]{16,}`},
+	{ID: "jwt", Name: "JWTs", Pattern: `eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`},
+	{ID: "openai_anthropic_key", Name: "OpenAI and Anthropic API keys", Pattern: `sk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}`},
+	{ID: "google_api_key", Name: "Google API keys", Pattern: `AIza[0-9A-Za-z_-]{35}`},
+	{ID: "github_token", Name: "GitHub tokens", Pattern: `gh[pousr]_[A-Za-z0-9]{36,}`},
+	{ID: "gitlab_token", Name: "GitLab tokens", Pattern: `glpat-[0-9A-Za-z_-]{20,}`},
+	{ID: "slack_token", Name: "Slack tokens", Pattern: `xox[abprs]-[A-Za-z0-9-]{10,}`},
+	{ID: "stripe_key", Name: "Stripe keys", Pattern: `(?:sk|rk)_live_[0-9A-Za-z]{24,}`},
+	{ID: "private_key", Name: "Private keys", Pattern: `-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----`},
 }
 
 type step func(p telemetry.Payload)
@@ -138,11 +155,18 @@ func compile(r Rule) (step, error) {
 
 	case Redact:
 		patterns := append([]string{}, r.Patterns...)
-		if r.Builtins {
-			patterns = append(patterns, BuiltinSecretPatterns...)
+		for _, s := range SecretPatterns {
+			if r.Builtins || slices.Contains(r.Secrets, s.ID) {
+				patterns = append(patterns, s.Pattern)
+			}
+		}
+		for _, id := range r.Secrets {
+			if !slices.ContainsFunc(SecretPatterns, func(s SecretPattern) bool { return s.ID == id }) {
+				return nil, fmt.Errorf("unknown secret pattern %q", id)
+			}
 		}
 		if len(patterns) == 0 {
-			return nil, fmt.Errorf("patterns or builtins are required")
+			return nil, fmt.Errorf("patterns, secrets or builtins are required")
 		}
 		res := make([]*regexp.Regexp, 0, len(patterns))
 		for _, pat := range patterns {
@@ -167,6 +191,12 @@ func compile(r Rule) (step, error) {
 				})
 			})
 		}, nil
+
+	case DropKnown:
+		return compileKnown(r.Categories, nil)
+	case HashKnown:
+		salt := r.Salt
+		return compileKnown(r.Categories, func(v pcommon.Value) { v.SetStr(hashValue(salt, v)) })
 	}
 	return nil, fmt.Errorf("unknown rule type")
 }
@@ -190,13 +220,17 @@ func attributeAction(r Rule, match func(string) bool) func(pcommon.Map) {
 		return func(m pcommon.Map) {
 			m.Range(func(k string, v pcommon.Value) bool {
 				if match(k) {
-					sum := sha256.Sum256([]byte(r.Salt + v.AsString()))
-					v.SetStr("sha256:" + hex.EncodeToString(sum[:16]))
+					v.SetStr(hashValue(r.Salt, v))
 				}
 				return true
 			})
 		}
 	}
+}
+
+func hashValue(salt string, v pcommon.Value) string {
+	sum := sha256.Sum256([]byte(salt + v.AsString()))
+	return "sha256:" + hex.EncodeToString(sum[:16])
 }
 
 // eventNames are the places agents put a log event's name: the OTLP

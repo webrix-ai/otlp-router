@@ -24,8 +24,9 @@ destination must not see.
 - **One ingress.** OTLP over gRPC (`:4317`) and HTTP (`:4318`), protobuf or JSON, gzip, for traces, metrics and logs.
 - **Many targets.** Each target gets its own copy, its own filters and its own retry queue, so a slow or failing
   vendor never holds up the others.
-- **Per-target filters.** Drop prompt events, drop, mask or hash attributes such as `user.email`, redact API keys and
-  tokens, drop spans or metrics by name, and choose which agents a target receives.
+- **Per-target filters.** Toggle off prompts, tool arguments, tool results and more by meaning, across every agent's
+  own names. Hash or drop user identity, redact API keys and tokens, add your own rules, and choose which agents a
+  target receives.
 - **A web UI.** Turn targets on and off, edit filters, and preview exactly what a target will receive using the latest
   real payload. Protected by an admin login set in the config.
 - **Ingest tokens.** Agents authenticate with bearer tokens you create, rotate and revoke in the UI. Only hashes are
@@ -169,16 +170,48 @@ Filters run in order, on that target's copy only:
 
 | Rule              | Does                                                                            |
 | ----------------- | ------------------------------------------------------------------------------- |
+| `drop_known`      | Drops a kind of data under each agent's own names; see below                    |
+| `hash_known`      | Hashes a kind of data (`identity`) under each agent's own names, with a salt    |
 | `drop_log_events` | Drops log records whose event name matches, e.g. `*user_prompt`                 |
 | `drop_attributes` | Removes attributes by key glob, on resources, records or both                   |
 | `mask_attributes` | Replaces values with `[REDACTED]`                                               |
 | `hash_attributes` | Replaces values with a salted SHA-256, so you can still group by them           |
-| `redact`          | Regex replace in log bodies and string attributes; `builtins` covers common keys |
+| `redact`          | Regex replace in log bodies and string attributes: `patterns`, named `secrets`, or `builtins` for all |
 | `drop_spans`      | Drops spans by name                                                             |
 | `drop_metrics`    | Drops metrics by name                                                           |
 
-The UI ships presets: **Privacy** (drop prompts and content, hash identity, redact secrets), **Anonymous usage** and
-**Redact secrets**.
+Every agent names the same data differently: Codex puts tool results in `output`, Gemini CLI puts tool arguments in
+`function_args`, Copilot follows the OpenTelemetry GenAI conventions. `drop_known` takes categories instead of names
+and removes each one using the names of the agent that sent the record, so a key like `output` is only removed from
+Codex telemetry:
+
+```yaml
+filters:
+  - type: drop_known
+    categories: [prompts, responses, tool_results]
+```
+
+| Category         | Removes                                                                                         |
+| ---------------- | ----------------------------------------------------------------------------------------------- |
+| `prompts`        | Prompt text. The prompt events stay, so prompts can still be counted                            |
+| `system_prompts` | The instructions an agent or SDK gives the model                                                |
+| `responses`      | Model response text                                                                             |
+| `tool_arguments` | What the agent passed to tools (commands, file paths). Tool names, decisions and outcomes stay  |
+| `tool_results`   | What tools returned (command output, file contents). Success, errors and durations stay         |
+| `cost`           | Spend in dollars, for agents that report it. Token counts stay                                  |
+| `noise`          | High-volume events, such as Codex's per-chunk stream events (the final one, with tokens, stays) |
+| `identity`       | Emails, user and account ids, host names. Also usable with `hash_known`                         |
+
+Telemetry from an agent the router has no profile for gets OpenTelemetry's standard names plus common ones, and its
+`*user_prompt` events are dropped whole.
+
+`redact` takes secret formats by id: `aws_access_key`, `bearer_token`, `jwt`, `openai_anthropic_key`,
+`google_api_key`, `github_token`, `gitlab_token`, `slack_token`, `stripe_key` and `private_key`.
+
+In the UI, a target's filters are toggles: one per category, Keep, Hash or Drop for user identity, one per secret
+format (with its regular expression shown), and your own patterns. **What it removes** under each category lists the
+exact events, attributes and metrics, per agent. Anything else goes under **Custom rules**, which run after the
+toggles.
 
 Header values, tokens and salts can be `${env:NAME}` references. They are resolved inside the router, so the secret
 lives in a Kubernetes Secret or environment variable and never in the stored target list. Literal secrets entered in

@@ -46,7 +46,7 @@ func (p Payload) WalkAttributes(fn func(m pcommon.Map, level Level)) {
 			for j := 0; j < r.ScopeMetrics().Len(); j++ {
 				ms := r.ScopeMetrics().At(j).Metrics()
 				for k := 0; k < ms.Len(); k++ {
-					walkDataPoints(ms.At(k), func(m pcommon.Map) { fn(m, LevelRecord) })
+					WalkDataPoints(ms.At(k), func(m pcommon.Map) { fn(m, LevelRecord) })
 				}
 			}
 		}
@@ -123,7 +123,8 @@ func (p Payload) RemoveMetricsIf(drop func(pmetric.Metric) bool) {
 	})
 }
 
-func walkDataPoints(m pmetric.Metric, fn func(pcommon.Map)) {
+// WalkDataPoints calls fn for the attributes of every data point of a metric.
+func WalkDataPoints(m pmetric.Metric, fn func(pcommon.Map)) {
 	switch m.Type() {
 	case pmetric.MetricTypeGauge:
 		dps := m.Gauge().DataPoints()
@@ -155,6 +156,6 @@ func walkDataPoints(m pmetric.Metric, fn func(pcommon.Map)) {
 
 func dataPointCount(m pmetric.Metric) int {
 	n := 0
-	walkDataPoints(m, func(pcommon.Map) { n++ })
+	WalkDataPoints(m, func(pcommon.Map) { n++ })
 	return n
 }
