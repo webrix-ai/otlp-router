@@ -24,7 +24,7 @@ destination must not see.
 - **One ingress.** OTLP over gRPC (`:4317`) and HTTP (`:4318`), protobuf or JSON, gzip, for traces, metrics and logs.
 - **Many targets.** Each target gets its own copy, its own filters and its own retry queue, so a slow or failing
   vendor never holds up the others.
-- **Per-target filters.** Toggle off prompts, tool arguments, tool results and more by meaning, across every agent's
+- **Per-target filters.** Remove prompts, tool arguments, tool results and more by meaning, across every agent's
   own names. Hash or drop user identity, redact API keys and tokens, add your own rules, and choose which agents a
   target receives.
 - **A web UI.** Turn targets on and off, edit filters, and preview exactly what a target will receive using the latest
@@ -208,10 +208,10 @@ Telemetry from an agent the router has no profile for gets OpenTelemetry's stand
 `redact` takes secret formats by id: `aws_access_key`, `bearer_token`, `jwt`, `openai_anthropic_key`,
 `google_api_key`, `github_token`, `gitlab_token`, `slack_token`, `stripe_key` and `private_key`.
 
-In the UI, a target's filters are toggles: one per category, Keep, Hash or Drop for user identity, one per secret
-format (with its regular expression shown), and your own patterns. **What it removes** under each category lists the
-exact events, attributes and metrics, per agent. Anything else goes under **Custom rules**, which run after the
-toggles.
+In the UI, each category is **Send** or **Remove**, user identity is **Send**, **Hash** or **Remove**, and each secret
+format (with its regular expression shown) is **Send** or **Redact**, plus your own patterns. **What it removes** under
+each category lists the exact events, attributes and metrics, per agent. Anything else goes under **Custom rules**,
+which run after these choices.
 
 Header values, tokens and salts can be `${env:NAME}` references. They are resolved inside the router, so the secret
 lives in a Kubernetes Secret or environment variable and never in the stored target list. Literal secrets entered in

@@ -442,7 +442,7 @@ function RuleEditor({
 
 type IdentityMode = "keep" | "hash" | "drop"
 
-// Filters are one rule list. The toggles own the first drop_known, hash_known
+// Filters are one rule list. The choices own the first drop_known, hash_known
 // (identity) and redact rules; every other rule is a custom rule.
 interface FilterState {
   categories: string[]
@@ -500,7 +500,7 @@ function FilterControls({ rules, onChange }: { rules: Rule[]; onChange: (r: Rule
 
   return (
     <div className="space-y-6">
-      <FilterGroup title="Agent data" hint="Found under each agent's own names.">
+      <FilterGroup title="Agent data" hint="Send or remove each kind of data. The router finds it under each agent's own names.">
         <KnownDataPicker selected={s.categories} onChange={(categories) => set({ categories })} exclude={["identity"]} />
       </FilterGroup>
 
@@ -519,7 +519,7 @@ function FilterControls({ rules, onChange }: { rules: Rule[]; onChange: (r: Rule
         <SecretsControl secrets={s.secrets} patterns={s.patterns} onChange={(secrets, patterns) => set({ secrets, patterns })} />
       </FilterGroup>
 
-      <FilterGroup title="Custom rules" hint="Run after the toggles above, in order.">
+      <FilterGroup title="Custom rules" hint="Run after the choices above, in order.">
         <div className="space-y-2">
           {s.custom.map((r, i) => (
             <RuleEditor
@@ -540,7 +540,7 @@ function FilterControls({ rules, onChange }: { rules: Rule[]; onChange: (r: Rule
         <AddRule types={CUSTOM_RULES} onAdd={(type) => setCustom([...s.custom, emptyRule(type)])} />
       </FilterGroup>
 
-      <FilterGroup title="Everything this target removes" hint="Read only. Every toggle and custom rule above, as what happens to the data.">
+      <FilterGroup title="Everything this target removes" hint="Read only. Every choice and custom rule above, as what happens to the data.">
         <EffectiveFilters rules={rules} />
       </FilterGroup>
     </div>
@@ -667,7 +667,7 @@ function EffectiveFilters({ rules }: { rules: Rule[] }) {
           </div>
         ))}
       </div>
-      <p className="text-[11px] text-faint">Hover an item to see which toggle or rule adds it.</p>
+      <p className="text-[11px] text-faint">Hover an item to see which choice or rule adds it.</p>
       <ShowRemovals expanded={raw} onToggle={() => setRaw(!raw)} label="Show saved rules" />
       {raw && <JsonViewer title="filters" value={JSON.parse(JSON.stringify(clean({ filters: rules } as Target).filters))} />}
     </div>
@@ -716,16 +716,17 @@ function KnownDataPicker({
           const expanded = open === c.id
           return (
             <div key={c.id} className="rounded-lg px-1 py-1">
-              <div className="flex items-start gap-2.5">
-                <span className="pt-0.5">
-                  <Toggle
-                    checked={on}
-                    onChange={(v) => onChange(v ? [...selected, c.id] : selected.filter((x) => x !== c.id))}
-                    label={c.name}
-                  />
-                </span>
+              <div className="flex items-start gap-3">
                 <span className="min-w-0 flex-1">
-                  <span className="text-sm">{c.name}</span>
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="text-sm">{c.name}</span>
+                    <Choice
+                      label={c.name}
+                      value={on ? "remove" : "send"}
+                      options={SEND_OR_REMOVE}
+                      onChange={(v) => onChange(v === "remove" ? [...selected, c.id] : selected.filter((x) => x !== c.id))}
+                    />
+                  </span>
                   <span className="block text-xs text-faint">{c.description}</span>
                   <span className="block text-[11px] text-muted">{covers.join(", ")}</span>
                   <ShowRemovals expanded={expanded} onToggle={() => setOpen(expanded ? undefined : c.id)} />
@@ -739,10 +740,59 @@ function KnownDataPicker({
   )
 }
 
-const IDENTITY_MODES: { value: IdentityMode; label: string }[] = [
-  { value: "keep", label: "Keep" },
-  { value: "hash", label: "Hash" },
-  { value: "drop", label: "Drop" }
+interface ChoiceOption<T extends string> {
+  value: T
+  label: string
+  removes?: boolean
+}
+
+function Choice<T extends string>({
+  label,
+  value,
+  options,
+  onChange
+}: {
+  label: string
+  value: T
+  options: ChoiceOption<T>[]
+  onChange: (v: T) => void
+}) {
+  return (
+    <div className="inline-flex shrink-0 rounded-lg border border-line p-0.5" role="radiogroup" aria-label={label}>
+      {options.map((o) => {
+        const on = value === o.value
+        return (
+          <button
+            key={o.value}
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(o.value)}
+            className={`rounded-md px-2.5 py-0.5 text-xs transition ${
+              on ? (o.removes ? "bg-danger/15 font-medium text-danger" : "bg-primary/15 font-medium text-primary") : "text-muted hover:text-fg"
+            }`}
+          >
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+const SEND_OR_REMOVE: ChoiceOption<"send" | "remove">[] = [
+  { value: "send", label: "Send" },
+  { value: "remove", label: "Remove", removes: true }
+]
+
+const SEND_OR_REDACT: ChoiceOption<"send" | "redact">[] = [
+  { value: "send", label: "Send" },
+  { value: "redact", label: "Redact", removes: true }
+]
+
+const IDENTITY_MODES: ChoiceOption<IdentityMode>[] = [
+  { value: "keep", label: "Send" },
+  { value: "hash", label: "Hash", removes: true },
+  { value: "drop", label: "Remove", removes: true }
 ]
 
 function IdentityControl({
@@ -760,21 +810,7 @@ function IdentityControl({
   return (
     <div className="px-1">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-lg border border-line p-0.5" role="radiogroup" aria-label="User identity">
-          {IDENTITY_MODES.map((m) => (
-            <button
-              key={m.value}
-              role="radio"
-              aria-checked={mode === m.value}
-              onClick={() => onChange(m.value, salt)}
-              className={`rounded-md px-3 py-1 text-xs transition ${
-                mode === m.value ? "bg-primary/15 font-medium text-primary" : "text-muted hover:text-fg"
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
+        <Choice label="User identity" value={mode} options={IDENTITY_MODES} onChange={(m) => onChange(m, salt)} />
         {mode === "hash" && (
           <input
             className="input w-56 py-1 font-mono text-xs"
@@ -805,31 +841,30 @@ function SecretsControl({
     <div className="space-y-1.5">
       <div className="flex gap-3 px-1 text-[11px]">
         <button className="text-primary hover:underline" onClick={() => onChange(all.map((p) => p.id), patterns)}>
-          Select all
+          Redact all
         </button>
         <button className="text-primary hover:underline" onClick={() => onChange([], patterns)}>
-          Clear
+          Send all
         </button>
       </div>
       {all.map((p) => (
-        <div key={p.id} className="flex items-start gap-2.5 px-1 py-0.5">
-          <span className="pt-0.5">
-            <Toggle
-              checked={secrets.includes(p.id)}
-              onChange={(v) => onChange(v ? [...secrets, p.id] : secrets.filter((x) => x !== p.id), patterns)}
-              label={p.name}
-            />
-          </span>
+        <div key={p.id} className="flex items-center gap-3 px-1 py-0.5">
           <span className="min-w-0 flex-1">
             <span className="text-sm">{p.name}</span>
             <code className="block truncate font-mono text-[11px] text-faint" title={p.pattern}>
               {p.pattern}
             </code>
           </span>
+          <Choice
+            label={p.name}
+            value={secrets.includes(p.id) ? "redact" : "send"}
+            options={SEND_OR_REDACT}
+            onChange={(v) => onChange(v === "redact" ? [...secrets, p.id] : secrets.filter((x) => x !== p.id), patterns)}
+          />
         </div>
       ))}
       <div className="px-1 pt-2">
-        <div className="text-xs text-muted">Custom patterns</div>
+        <div className="text-xs text-muted">Also redact these patterns</div>
         <textarea
           className="input mt-1 min-h-14 font-mono text-xs"
           rows={Math.min(6, Math.max(2, patterns.length))}
@@ -850,7 +885,7 @@ const REMOVAL_SOURCE: Record<KnownRemoval["source"], string> = {
 
 function KnownRemovals({ removals }: { removals: KnownRemoval[] }) {
   return (
-    <div className="ml-11 mt-2 space-y-2.5 rounded-lg border border-line bg-surface/60 p-2.5">
+    <div className="mt-2 space-y-2.5 rounded-lg border border-line bg-surface/60 p-2.5">
       {removals.map((r, i) => (
         <div key={i} className="space-y-1">
           <div className="text-[11px] font-medium text-fg">
