@@ -162,14 +162,15 @@ func (s *server) logout(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) info(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"version":    s.Version,
-		"publicUrl":  s.Config.PublicURL,
-		"ingestAuth": !s.Config.Auth.AllowUnauthenticatedIngest,
-		"readOnly":   s.Config.ReadOnly,
-		"live":       s.Router.LiveEnabled(),
-		"store":      s.Store.Kind(),
-		"listen":     s.Config.Listen,
-		"presets":    filter.Presets,
+		"version":        s.Version,
+		"publicUrl":      s.Config.PublicURL,
+		"ingestAuth":     !s.Config.Auth.AllowUnauthenticatedIngest,
+		"readOnly":       s.Config.ReadOnly,
+		"live":           s.Router.LiveEnabled(),
+		"store":          s.Store.Kind(),
+		"listen":         s.Config.Listen,
+		"secretPatterns": filter.SecretPatterns,
+		"knownData":      filter.KnownCategories,
 	})
 }
 

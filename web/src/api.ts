@@ -4,6 +4,8 @@ export const SIGNALS: Signal[] = ["traces", "metrics", "logs"]
 export type TargetType = "otlphttp" | "otlpgrpc" | "willow"
 
 export type RuleType =
+  | "drop_known"
+  | "hash_known"
   | "drop_attributes"
   | "mask_attributes"
   | "hash_attributes"
@@ -17,6 +19,8 @@ export interface Rule {
   keys?: string[]
   names?: string[]
   patterns?: string[]
+  secrets?: string[]
+  categories?: string[]
   builtins?: boolean
   level?: "" | "resource" | "record"
   salt?: string
@@ -129,11 +133,29 @@ export interface LiveResponse {
   pods?: PodsReport
 }
 
-export interface Preset {
+export interface SecretPattern {
+  id: string
+  name: string
+  pattern: string
+}
+
+export interface KnownCategory {
   id: string
   name: string
   description: string
-  rules: Rule[]
+  agents: string[]
+  standard: boolean
+  hashable: boolean
+  removes: KnownRemoval[]
+}
+
+export interface KnownRemoval {
+  source: "agent" | "standard" | "other"
+  agents?: string[]
+  events?: string[]
+  attributes?: string[]
+  metrics?: string[]
+  rules?: string[]
 }
 
 export interface Info {
@@ -144,7 +166,8 @@ export interface Info {
   live: boolean
   store: string
   listen: { OTLPGRPC: string; OTLPHTTP: string; Admin: string }
-  presets: Preset[]
+  secretPatterns: SecretPattern[]
+  knownData: KnownCategory[]
 }
 
 export interface TargetsResponse {

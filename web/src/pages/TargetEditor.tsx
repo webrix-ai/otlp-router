@@ -1,11 +1,13 @@
 import { useState, type ReactNode } from "react"
-import { ArrowDown, ArrowUp, Eye, Plug, Plus, Sparkles, Trash2, Wand2 } from "lucide-react"
+import { ArrowDown, ArrowUp, ChevronRight, Eye, Plug, Plus, Trash2, Wand2 } from "lucide-react"
 import {
   api,
   SECRET_MASK,
   SIGNALS,
   WILLOW_REGIONS,
   willowEndpoint,
+  type KnownCategory,
+  type KnownRemoval,
   type PreviewResponse,
   type Rule,
   type RuleType,
@@ -34,7 +36,9 @@ export function newTarget(type: TargetType): Target {
   return { ...base, endpoint: "", encoding: "proto", compression: "gzip" }
 }
 
-const RULES: Record<RuleType, { label: string; help: string; field: "keys" | "names" | "patterns" }> = {
+const RULES: Record<RuleType, { label: string; help: string; field: "keys" | "names" | "patterns" | "categories" }> = {
+  drop_known: { label: "Drop known data", help: "Found by meaning, under each agent's own names", field: "categories" },
+  hash_known: { label: "Hash known data", help: "Found by meaning, under each agent's own names", field: "categories" },
   drop_log_events: { label: "Drop log events", help: "Event names, e.g. *user_prompt", field: "names" },
   drop_attributes: { label: "Drop attributes", help: "Attribute keys, globs allowed, e.g. gen_ai.prompt*", field: "keys" },
   mask_attributes: { label: "Mask attributes", help: "Values become [REDACTED]", field: "keys" },
@@ -57,7 +61,8 @@ function clean(t: Target): Target {
       ...r,
       keys: r.keys && list(r.keys),
       names: r.names && list(r.names),
-      patterns: r.patterns && list(r.patterns)
+      patterns: r.patterns && list(r.patterns),
+      categories: r.categories && list(r.categories)
     }))
   }
 }
@@ -305,37 +310,8 @@ export default function TargetEditor({ initial, onClose }: { initial: Target; on
         </div>
 
         <div className="space-y-8">
-          <Section title="Filters" hint="Applied in order to this target's copy only. Other targets are unaffected.">
-            <div className="flex flex-wrap gap-2">
-              {(info?.presets ?? []).map((p) => (
-                <button key={p.id} className="btn-ghost py-1.5 text-xs" title={p.description} onClick={() => setRules([...rules, ...p.rules])}>
-                  <Sparkles className="size-3.5 text-primary" /> {p.name}
-                </button>
-              ))}
-            </div>
-            {rules.length === 0 && (
-              <div className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-sm text-faint">
-                Everything is forwarded as is. Start from a preset or add a rule.
-              </div>
-            )}
-            <div className="space-y-2">
-              {rules.map((r, i) => (
-                <RuleEditor
-                  key={i}
-                  rule={r}
-                  onChange={(next) => setRules(rules.map((x, j) => (j === i ? next : x)))}
-                  onRemove={() => setRules(rules.filter((_, j) => j !== i))}
-                  onMove={(d) => {
-                    const next = [...rules]
-                    const j = i + d
-                    if (j < 0 || j >= next.length) return
-                    ;[next[i], next[j]] = [next[j], next[i]]
-                    setRules(next)
-                  }}
-                />
-              ))}
-            </div>
-            <AddRule onAdd={(type) => setRules([...rules, emptyRule(type)])} />
+          <Section title="Filters" hint="Applied to this target's copy only. Other targets are unaffected.">
+            <FilterControls rules={rules} onChange={setRules} />
           </Section>
 
           <Preview target={t} />
@@ -347,7 +323,7 @@ export default function TargetEditor({ initial, onClose }: { initial: Target; on
 
 function emptyRule(type: RuleType): Rule {
   const r: Rule = { type }
-  r[RULES[type].field] = [""]
+  r[RULES[type].field] = type === "drop_known" ? ["prompts"] : [""]
   if (type === "redact") r.builtins = true
   return r
 }
@@ -430,15 +406,19 @@ function RuleEditor({
           </IconBtn>
         </span>
       </div>
-      <textarea
-        className="input min-h-16 font-mono text-xs"
-        rows={Math.min(6, Math.max(2, values.length))}
-        placeholder={meta.help}
-        value={values.join("\n")}
-        onChange={(e) => onChange({ ...rule, [meta.field]: e.target.value.split("\n") })}
-      />
+      {meta.field === "categories" ? (
+        <KnownDataPicker selected={values} onChange={(categories) => onChange({ ...rule, categories })} />
+      ) : (
+        <textarea
+          className="input min-h-16 font-mono text-xs"
+          rows={Math.min(6, Math.max(2, values.length))}
+          placeholder={meta.help}
+          value={values.join("\n")}
+          onChange={(e) => onChange({ ...rule, [meta.field]: e.target.value.split("\n") })}
+        />
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted">
-        <span className="text-faint">One per line. {meta.help}.</span>
+        <span className="text-faint">{meta.field === "categories" ? `${meta.help}.` : `One per line. ${meta.help}.`}</span>
         {rule.type === "redact" && (
           <label className="flex items-center gap-2">
             <Toggle checked={!!rule.builtins} onChange={(builtins) => onChange({ ...rule, builtins })} label="Built-in secret patterns" />
@@ -460,6 +440,446 @@ function RuleEditor({
   )
 }
 
+type IdentityMode = "keep" | "hash" | "drop"
+
+// Filters are one rule list. The toggles own the first drop_known, hash_known
+// (identity) and redact rules; every other rule is a custom rule.
+interface FilterState {
+  categories: string[]
+  identity: IdentityMode
+  salt: string
+  secrets: string[]
+  patterns: string[]
+  custom: Rule[]
+}
+
+const CUSTOM_RULES: RuleType[] = ["drop_log_events", "drop_attributes", "mask_attributes", "hash_attributes", "drop_spans", "drop_metrics"]
+
+function splitRules(rules: Rule[], allSecrets: string[]): FilterState {
+  const s: FilterState = { categories: [], identity: "keep", salt: "", secrets: [], patterns: [], custom: [] }
+  let known = false
+  let hashed = false
+  let redact = false
+  for (const r of rules) {
+    if (r.type === "drop_known" && !known) {
+      known = true
+      const categories = r.categories ?? []
+      s.categories = categories.filter((c) => c !== "identity")
+      if (categories.includes("identity")) s.identity = "drop"
+    } else if (r.type === "hash_known" && !hashed && (r.categories ?? []).join() === "identity") {
+      hashed = true
+      s.identity = "hash"
+      s.salt = r.salt ?? ""
+    } else if (r.type === "redact" && !redact) {
+      redact = true
+      s.secrets = r.builtins ? allSecrets : (r.secrets ?? [])
+      s.patterns = r.patterns ?? []
+    } else {
+      s.custom.push(r)
+    }
+  }
+  return s
+}
+
+function joinRules(s: FilterState): Rule[] {
+  const out: Rule[] = []
+  const categories = [...s.categories, ...(s.identity === "drop" ? ["identity"] : [])]
+  if (categories.length) out.push({ type: "drop_known", categories })
+  if (s.identity === "hash") out.push({ type: "hash_known", categories: ["identity"], salt: s.salt || undefined })
+  if (s.secrets.length || s.patterns.some((p) => p.trim())) out.push({ type: "redact", secrets: s.secrets, patterns: s.patterns })
+  return [...out, ...s.custom]
+}
+
+function FilterControls({ rules, onChange }: { rules: Rule[]; onChange: (r: Rule[]) => void }) {
+  const { info } = useRouterData()
+  const allSecrets = (info?.secretPatterns ?? []).map((p) => p.id)
+  const s = splitRules(rules, allSecrets)
+  const set = (p: Partial<FilterState>) => onChange(joinRules({ ...s, ...p }))
+  const setCustom = (custom: Rule[]) => set({ custom })
+  const identity = info?.knownData.find((c) => c.id === "identity")
+
+  return (
+    <div className="space-y-6">
+      <FilterGroup title="Agent data" hint="Found under each agent's own names.">
+        <KnownDataPicker selected={s.categories} onChange={(categories) => set({ categories })} exclude={["identity"]} />
+      </FilterGroup>
+
+      {identity && (
+        <FilterGroup title="User identity" hint={identity.description}>
+          <IdentityControl
+            category={identity}
+            mode={s.identity}
+            salt={s.salt}
+            onChange={(identity, salt) => set({ identity, salt })}
+          />
+        </FilterGroup>
+      )}
+
+      <FilterGroup title="Secrets" hint="Replaced with [REDACTED] in log bodies and string attributes.">
+        <SecretsControl secrets={s.secrets} patterns={s.patterns} onChange={(secrets, patterns) => set({ secrets, patterns })} />
+      </FilterGroup>
+
+      <FilterGroup title="Custom rules" hint="Run after the toggles above, in order.">
+        <div className="space-y-2">
+          {s.custom.map((r, i) => (
+            <RuleEditor
+              key={i}
+              rule={r}
+              onChange={(next) => setCustom(s.custom.map((x, j) => (j === i ? next : x)))}
+              onRemove={() => setCustom(s.custom.filter((_, j) => j !== i))}
+              onMove={(d) => {
+                const next = [...s.custom]
+                const j = i + d
+                if (j < 0 || j >= next.length) return
+                ;[next[i], next[j]] = [next[j], next[i]]
+                setCustom(next)
+              }}
+            />
+          ))}
+        </div>
+        <AddRule types={CUSTOM_RULES} onAdd={(type) => setCustom([...s.custom, emptyRule(type)])} />
+      </FilterGroup>
+
+      <FilterGroup title="Everything this target removes" hint="Read only. Every toggle and custom rule above, as what happens to the data.">
+        <EffectiveFilters rules={rules} />
+      </FilterGroup>
+    </div>
+  )
+}
+
+const EFFECTS = [
+  "Log events dropped",
+  "Records dropped",
+  "Spans dropped",
+  "Metrics dropped",
+  "Attributes dropped",
+  "Attributes masked",
+  "Attributes hashed",
+  "Text redacted"
+] as const
+
+type Effect = (typeof EFFECTS)[number]
+
+interface EffectItem {
+  value: string
+  detail?: string
+  from: string[]
+}
+
+const LEVELS: Record<string, string> = { resource: "resource only", record: "record only" }
+
+function effectsOf(rules: Rule[], known: KnownCategory[], secrets: { id: string; name: string; pattern: string }[]) {
+  const out = new Map<Effect, Map<string, EffectItem>>()
+  const add = (effect: Effect, values: string[] | undefined, from: string, detail?: (v: string) => string | undefined) => {
+    for (const raw of values ?? []) {
+      const value = raw.trim()
+      if (!value) continue
+      const items = out.get(effect) ?? new Map<string, EffectItem>()
+      out.set(effect, items)
+      const item = items.get(value) ?? { value, detail: detail?.(value), from: [] }
+      if (!item.from.includes(from)) item.from.push(from)
+      items.set(value, item)
+    }
+  }
+  const sourceOf = (r: KnownRemoval) =>
+    r.source === "agent" ? (r.agents ?? []).map(agentName).join(", ") : r.source === "standard" ? "OpenTelemetry standard" : "unknown agents"
+
+  for (const r of rules) {
+    switch (r.type) {
+      case "drop_known":
+      case "hash_known":
+        for (const c of known.filter((k) => r.categories?.includes(k.id))) {
+          for (const rm of c.removes) {
+            const from = `${c.name} · ${sourceOf(rm)}`
+            if (r.type === "hash_known") {
+              add("Attributes hashed", rm.attributes, from)
+              continue
+            }
+            add("Log events dropped", rm.events, from)
+            add("Records dropped", rm.rules, from)
+            add("Metrics dropped", rm.metrics, from)
+            add("Attributes dropped", rm.attributes, from)
+          }
+        }
+        break
+      case "drop_log_events":
+        add("Log events dropped", r.names, "Custom rule")
+        break
+      case "drop_spans":
+        add("Spans dropped", r.names, "Custom rule")
+        break
+      case "drop_metrics":
+        add("Metrics dropped", r.names, "Custom rule")
+        break
+      case "drop_attributes":
+      case "mask_attributes":
+      case "hash_attributes": {
+        const effect: Effect =
+          r.type === "drop_attributes" ? "Attributes dropped" : r.type === "mask_attributes" ? "Attributes masked" : "Attributes hashed"
+        add(effect, r.keys, r.level ? `Custom rule · ${LEVELS[r.level]}` : "Custom rule")
+        break
+      }
+      case "redact": {
+        const ids = r.builtins ? secrets.map((p) => p.id) : (r.secrets ?? [])
+        for (const p of secrets.filter((p) => ids.includes(p.id))) add("Text redacted", [p.name], "Secrets", () => p.pattern)
+        add("Text redacted", r.patterns, "Custom pattern")
+        break
+      }
+    }
+  }
+  return EFFECTS.flatMap((effect) => {
+    const items = out.get(effect)
+    return items ? [{ effect, items: [...items.values()] }] : []
+  })
+}
+
+function EffectiveFilters({ rules }: { rules: Rule[] }) {
+  const { info } = useRouterData()
+  const [raw, setRaw] = useState(false)
+  const groups = effectsOf(rules, info?.knownData ?? [], info?.secretPatterns ?? [])
+  return (
+    <div className="space-y-2">
+      <div className="space-y-3 rounded-lg border border-line bg-surface/60 p-3">
+        {groups.length === 0 && <p className="text-xs text-faint">Nothing is removed. Telemetry is sent as received.</p>}
+        {groups.map(({ effect, items }) => (
+          <div key={effect} className="space-y-1">
+            <div className="text-[11px] font-medium text-fg">
+              {effect} <span className="font-normal text-faint">({items.length})</span>
+            </div>
+            {effect === "Text redacted" ? (
+              <div className="space-y-0.5">
+                {items.map((i) => (
+                  <div key={i.value} className="flex items-baseline gap-2 text-[11px]" title={i.from.join("\n")}>
+                    <span className="w-40 shrink-0 truncate text-muted">{i.detail ? i.value : "Custom pattern"}</span>
+                    <code className="truncate font-mono text-faint">{i.detail ?? i.value}</code>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1">
+                {items.map((i) => (
+                  <span key={i.value} title={i.from.join("\n")} className="rounded bg-line/60 px-1.5 py-0.5 font-mono text-[11px] text-muted">
+                    {i.value}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-faint">Hover an item to see which toggle or rule adds it.</p>
+      <ShowRemovals expanded={raw} onToggle={() => setRaw(!raw)} label="Show saved rules" />
+      {raw && <JsonViewer title="filters" value={JSON.parse(JSON.stringify(clean({ filters: rules } as Target).filters))} />}
+    </div>
+  )
+}
+
+function FilterGroup({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <div className="label mb-0">{title}</div>
+        {hint && <p className="text-xs text-faint">{hint}</p>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function ShowRemovals({ expanded, onToggle, label = "What it removes" }: { expanded: boolean; onToggle: () => void; label?: string }) {
+  return (
+    <button className="mt-1 inline-flex items-center gap-1 text-[11px] text-primary hover:underline" aria-expanded={expanded} onClick={onToggle}>
+      <ChevronRight className={`size-3 transition ${expanded ? "rotate-90" : ""}`} />
+      {label}
+    </button>
+  )
+}
+
+function KnownDataPicker({
+  selected,
+  onChange,
+  exclude = []
+}: {
+  selected: string[]
+  onChange: (c: string[]) => void
+  exclude?: string[]
+}) {
+  const { info } = useRouterData()
+  const [open, setOpen] = useState<string>()
+  return (
+    <div className="space-y-1.5">
+      {(info?.knownData ?? [])
+        .filter((c) => !exclude.includes(c.id))
+        .map((c) => {
+          const on = selected.includes(c.id)
+          const covers = [...new Set(c.agents.map(agentName)), ...(c.standard ? ["OpenTelemetry standard names"] : [])]
+          const expanded = open === c.id
+          return (
+            <div key={c.id} className="rounded-lg px-1 py-1">
+              <div className="flex items-start gap-2.5">
+                <span className="pt-0.5">
+                  <Toggle
+                    checked={on}
+                    onChange={(v) => onChange(v ? [...selected, c.id] : selected.filter((x) => x !== c.id))}
+                    label={c.name}
+                  />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="text-sm">{c.name}</span>
+                  <span className="block text-xs text-faint">{c.description}</span>
+                  <span className="block text-[11px] text-muted">{covers.join(", ")}</span>
+                  <ShowRemovals expanded={expanded} onToggle={() => setOpen(expanded ? undefined : c.id)} />
+                </span>
+              </div>
+              {expanded && <KnownRemovals removals={c.removes} />}
+            </div>
+          )
+        })}
+    </div>
+  )
+}
+
+const IDENTITY_MODES: { value: IdentityMode; label: string }[] = [
+  { value: "keep", label: "Keep" },
+  { value: "hash", label: "Hash" },
+  { value: "drop", label: "Drop" }
+]
+
+function IdentityControl({
+  category,
+  mode,
+  salt,
+  onChange
+}: {
+  category: KnownCategory
+  mode: IdentityMode
+  salt: string
+  onChange: (mode: IdentityMode, salt: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="px-1">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border border-line p-0.5" role="radiogroup" aria-label="User identity">
+          {IDENTITY_MODES.map((m) => (
+            <button
+              key={m.value}
+              role="radio"
+              aria-checked={mode === m.value}
+              onClick={() => onChange(m.value, salt)}
+              className={`rounded-md px-3 py-1 text-xs transition ${
+                mode === m.value ? "bg-primary/15 font-medium text-primary" : "text-muted hover:text-fg"
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        {mode === "hash" && (
+          <input
+            className="input w-56 py-1 font-mono text-xs"
+            placeholder="salt, e.g. ${env:HASH_SALT}"
+            value={salt}
+            onChange={(e) => onChange(mode, e.target.value)}
+          />
+        )}
+      </div>
+      <ShowRemovals expanded={open} onToggle={() => setOpen(!open)} label="What it covers" />
+      {open && <KnownRemovals removals={category.removes} />}
+    </div>
+  )
+}
+
+function SecretsControl({
+  secrets,
+  patterns,
+  onChange
+}: {
+  secrets: string[]
+  patterns: string[]
+  onChange: (secrets: string[], patterns: string[]) => void
+}) {
+  const { info } = useRouterData()
+  const all = info?.secretPatterns ?? []
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-3 px-1 text-[11px]">
+        <button className="text-primary hover:underline" onClick={() => onChange(all.map((p) => p.id), patterns)}>
+          Select all
+        </button>
+        <button className="text-primary hover:underline" onClick={() => onChange([], patterns)}>
+          Clear
+        </button>
+      </div>
+      {all.map((p) => (
+        <div key={p.id} className="flex items-start gap-2.5 px-1 py-0.5">
+          <span className="pt-0.5">
+            <Toggle
+              checked={secrets.includes(p.id)}
+              onChange={(v) => onChange(v ? [...secrets, p.id] : secrets.filter((x) => x !== p.id), patterns)}
+              label={p.name}
+            />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="text-sm">{p.name}</span>
+            <code className="block truncate font-mono text-[11px] text-faint" title={p.pattern}>
+              {p.pattern}
+            </code>
+          </span>
+        </div>
+      ))}
+      <div className="px-1 pt-2">
+        <div className="text-xs text-muted">Custom patterns</div>
+        <textarea
+          className="input mt-1 min-h-14 font-mono text-xs"
+          rows={Math.min(6, Math.max(2, patterns.length))}
+          placeholder="One regular expression per line, e.g. ACME-[0-9]{8}"
+          value={patterns.join("\n")}
+          onChange={(e) => onChange(secrets, e.target.value.split("\n"))}
+        />
+      </div>
+    </div>
+  )
+}
+
+const REMOVAL_SOURCE: Record<KnownRemoval["source"], string> = {
+  standard: "Any agent, by OpenTelemetry standard names",
+  agent: "",
+  other: "Agents the router has no profile for"
+}
+
+function KnownRemovals({ removals }: { removals: KnownRemoval[] }) {
+  return (
+    <div className="ml-11 mt-2 space-y-2.5 rounded-lg border border-line bg-surface/60 p-2.5">
+      {removals.map((r, i) => (
+        <div key={i} className="space-y-1">
+          <div className="text-[11px] font-medium text-fg">
+            {r.source === "agent" ? (r.agents ?? []).map(agentName).join(", ") : REMOVAL_SOURCE[r.source]}
+          </div>
+          <RemovalList label="Events dropped" values={r.events} />
+          <RemovalList label="Attributes" values={r.attributes} />
+          <RemovalList label="Metrics dropped" values={r.metrics} />
+          <RemovalList label="Records dropped" values={r.rules} plain />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function RemovalList({ label, values, plain }: { label: string; values?: string[]; plain?: boolean }) {
+  if (!values?.length) return null
+  return (
+    <div className="flex flex-wrap items-baseline gap-1">
+      <span className="w-28 shrink-0 text-[11px] text-faint">{label}</span>
+      {values.map((v) => (
+        <span key={v} className={`rounded bg-line/60 px-1.5 py-0.5 text-[11px] text-muted ${plain ? "" : "font-mono"}`}>
+          {v}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function IconBtn({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
   return (
     <button aria-label={label} title={label} onClick={onClick} className="rounded p-1 hover:bg-line hover:text-fg">
@@ -468,7 +888,7 @@ function IconBtn({ label, onClick, children }: { label: string; onClick: () => v
   )
 }
 
-function AddRule({ onAdd }: { onAdd: (t: RuleType) => void }) {
+function AddRule({ types, onAdd }: { types: RuleType[]; onAdd: (t: RuleType) => void }) {
   return (
     <select
       className="input w-auto text-sm"
@@ -477,8 +897,8 @@ function AddRule({ onAdd }: { onAdd: (t: RuleType) => void }) {
         if (e.target.value) onAdd(e.target.value as RuleType)
       }}
     >
-      <option value="">+ Add rule…</option>
-      {(Object.keys(RULES) as RuleType[]).map((k) => (
+      <option value="">+ Add custom rule…</option>
+      {types.map((k) => (
         <option key={k} value={k}>
           {RULES[k].label}
         </option>
