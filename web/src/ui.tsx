@@ -15,9 +15,7 @@ export function GithubIcon({ className }: { className?: string }) {
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <div className="grid size-10 place-items-center rounded-full bg-logo-bg">
-        <img src="/willow-logo-green.svg" alt="" className="size-5" />
-      </div>
+      <img src="/otlp-router-icon.svg" alt="" className="size-10 shrink-0" />
       {!compact && (
         <div className="leading-tight">
           <div className="text-[15px] font-semibold tracking-tight">OTLP Router</div>
