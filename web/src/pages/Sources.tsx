@@ -87,7 +87,7 @@ export default function Sources() {
             </div>
           </div>
           <div className="relative mt-5">
-            <pre className="code overflow-x-auto pr-24">{snippet}</pre>
+            <pre className="code pr-24 whitespace-pre-wrap wrap-anywhere">{snippet}</pre>
             <div className="absolute top-3 right-3">
               <CopyButton text={snippet} />
             </div>

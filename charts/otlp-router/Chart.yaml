@@ -5,7 +5,7 @@ type: application
 version: 0.1.0
 appVersion: "0.1.0"
 home: https://github.com/withwillowai/otlp-router
-icon: https://raw.githubusercontent.com/withwillowai/otlp-router/main/web/public/willow-logo-green.svg
+icon: https://raw.githubusercontent.com/withwillowai/otlp-router/main/web/public/otlp-router-icon.svg
 keywords: [opentelemetry, otlp, ai-agents, claude-code, codex, observability, willow]
 maintainers:
   - name: Willow
