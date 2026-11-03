@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="web/public/willow-logo-green.svg" width="56" alt="" />
+  <img src="web/public/otlp-router-icon.svg" width="96" alt="" />
 </p>
 
 <h1 align="center">OTLP Router</h1>
