@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { Check, Copy, Moon, Sun, X } from "lucide-react"
+import { agentName, isWillowAgent } from "./agents"
 
 export const GITHUB_URL = "https://github.com/withwillowai/otlp-router"
 export const WILLOW_URL = "https://withwillow.ai"
@@ -34,6 +35,27 @@ export function WillowWordmark({ className }: { className?: string }) {
       <img src="/willow-full-logo-dark.svg" alt="Willow" className={`${className} dark:hidden`} />
       <img src="/willow-full-logo-white.svg" alt="Willow" className={`${className} hidden dark:block`} />
     </>
+  )
+}
+
+export function WillowBadge() {
+  return (
+    <span
+      title="Sent by the Willow agent"
+      className="inline-flex items-center gap-1 rounded-full bg-logo-bg py-0.5 pr-1.5 pl-0.5 text-[10px] leading-none font-medium text-white"
+    >
+      <img src="/willow-logo-green.svg" alt="" className="size-3" />
+      Willow
+    </span>
+  )
+}
+
+export function AgentName({ slug }: { slug: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {agentName(slug)}
+      {isWillowAgent(slug) && <WillowBadge />}
+    </span>
   )
 }
 

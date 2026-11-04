@@ -55,7 +55,9 @@ type KnownRemoval struct {
 	Events     []string `json:"events,omitempty"`
 	Attributes []string `json:"attributes,omitempty"`
 	Metrics    []string `json:"metrics,omitempty"`
-	Rules      []string `json:"rules,omitempty"`
+	// Bodies are log events kept with their body emptied.
+	Bodies []string `json:"bodies,omitempty"`
+	Rules  []string `json:"rules,omitempty"`
 }
 
 // agentNames says where one agent puts a category's data.
@@ -63,12 +65,13 @@ type agentNames struct {
 	events     []string // log records and span events, dropped whole
 	attributes []string // keys removed from resources, records, span events and data points
 	metrics    []string // metrics, dropped whole
+	bodies     []string // log records kept with their body emptied
 	dropLog    func(plog.LogRecord) bool
 	dropLogIs  string // dropLog in words, for the UI
 }
 
 func (n agentNames) removal(source string, agents []string) KnownRemoval {
-	r := KnownRemoval{Source: source, Agents: agents, Events: n.events, Attributes: n.attributes, Metrics: n.metrics}
+	r := KnownRemoval{Source: source, Agents: agents, Events: n.events, Attributes: n.attributes, Metrics: n.metrics, Bodies: n.bodies}
 	if n.dropLogIs != "" {
 		r.Rules = []string{n.dropLogIs}
 	}
@@ -76,7 +79,7 @@ func (n agentNames) removal(source string, agents []string) KnownRemoval {
 }
 
 func (n agentNames) empty() bool {
-	return len(n.events) == 0 && len(n.attributes) == 0 && len(n.metrics) == 0 && n.dropLog == nil
+	return len(n.events) == 0 && len(n.attributes) == 0 && len(n.metrics) == 0 && len(n.bodies) == 0 && n.dropLog == nil
 }
 
 type knownDef struct {
@@ -95,6 +98,10 @@ var profiles = map[string]string{
 	"gemini-cli":     "gemini-cli",
 	"qwen-code":      "gemini-cli", // a Gemini CLI fork with the same events
 	"github-copilot": "github-copilot",
+	// Cursor and Pi have no OpenTelemetry export of their own. The Willow agent
+	// sends theirs, with the same records for both.
+	"cursor": "cursor",
+	"pi":     "cursor",
 }
 
 var knownDefs = []knownDef{
@@ -112,6 +119,7 @@ var knownDefs = []knownDef{
 			"claude-code": {attributes: []string{"prompt"}},
 			"codex":       {attributes: []string{"prompt"}},
 			"gemini-cli":  {attributes: []string{"prompt", "request_text"}},
+			"cursor":      {bodies: []string{"user_prompt"}},
 		},
 		unknown: agentNames{
 			events:     []string{"*user_prompt"},
@@ -156,6 +164,7 @@ var knownDefs = []knownDef{
 			"claude-code": {attributes: []string{"tool_parameters", "tool_input"}},
 			"codex":       {attributes: []string{"arguments"}},
 			"gemini-cli":  {attributes: []string{"function_args"}},
+			"cursor":      {attributes: []string{"willow.shell.command", "willow.file.path", "willow.detect.tool_input"}},
 		},
 		unknown: agentNames{
 			attributes: []string{"tool_input", "tool_parameters", "tool.arguments"},
@@ -212,6 +221,7 @@ var knownDefs = []knownDef{
 			"claude-code": {attributes: []string{"user.account_uuid", "organization.id"}},
 			"codex":       {attributes: []string{"user.account_id"}},
 			"gemini-cli":  {attributes: []string{"installation.id"}},
+			"cursor":      {attributes: []string{"device.id"}},
 		},
 	},
 }
@@ -263,14 +273,14 @@ var KnownCategories = func() []KnownCategory {
 
 // knownSet is what one rule does to one agent's telemetry.
 type knownSet struct {
-	events, attributes, metrics func(string) bool
-	dropLog                     []func(plog.LogRecord) bool
+	events, attributes, metrics, bodies func(string) bool
+	dropLog                             []func(plog.LogRecord) bool
 	// hash replaces matching attribute values; nil removes them.
 	hash func(pcommon.Value)
 }
 
 func newKnownSet(parts []agentNames, hash func(pcommon.Value)) *knownSet {
-	var events, attributes, metrics []string
+	var events, attributes, metrics, bodies []string
 	var dropLog []func(plog.LogRecord) bool
 	for _, n := range parts {
 		attributes = append(attributes, n.attributes...)
@@ -279,11 +289,22 @@ func newKnownSet(parts []agentNames, hash func(pcommon.Value)) *knownSet {
 		}
 		events = append(events, n.events...)
 		metrics = append(metrics, n.metrics...)
+		bodies = append(bodies, n.bodies...)
 		if n.dropLog != nil {
 			dropLog = append(dropLog, n.dropLog)
 		}
 	}
-	return &knownSet{events: globs(events), attributes: globs(attributes), metrics: globs(metrics), dropLog: dropLog, hash: hash}
+	return &knownSet{events: globs(events), attributes: globs(attributes), metrics: globs(metrics), bodies: globs(bodies), dropLog: dropLog, hash: hash}
+}
+
+// clearBody empties the body of a record whose event is in bodies.
+func (s *knownSet) clearBody(lr plog.LogRecord) {
+	for _, n := range eventNames(lr) {
+		if s.bodies(n) {
+			pcommon.NewValueEmpty().CopyTo(lr.Body())
+			return
+		}
+	}
 }
 
 func (s *knownSet) dropRecord(lr plog.LogRecord) bool {
@@ -370,6 +391,7 @@ func applyKnown(p telemetry.Payload, setFor func(pcommon.Resource, string) *know
 					if s.dropRecord(lr) {
 						return true
 					}
+					s.clearBody(lr)
 					s.attrs(lr.Attributes())
 					return false
 				})
