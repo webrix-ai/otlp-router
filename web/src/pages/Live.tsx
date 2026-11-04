@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react"
 import { ChevronRight, Pause, Play, Radio, Trash2 } from "lucide-react"
 import { SIGNALS, api, formatNumber, type LiveEntry, type LiveTargetStatus, type PodsReport, type Signal } from "../api"
-import { agentName } from "../agents"
 import { useRouterData } from "../App"
-import { ErrorBanner, PageHeader } from "../ui"
+import { AgentName, ErrorBanner, PageHeader } from "../ui"
 import { PodsNotice } from "./Overview"
 
 const POLL_MS = 2000
@@ -179,7 +178,12 @@ function Row({
             {e.status === "rejected" ? (
               <span className="text-danger">Rejected</span>
             ) : agents.length ? (
-              agents.map(agentName).join(", ")
+              agents.map((a, i) => (
+                <Fragment key={a}>
+                  {i > 0 && ", "}
+                  <AgentName slug={a} />
+                </Fragment>
+              ))
             ) : (
               "Unknown agent"
             )}
@@ -249,7 +253,7 @@ function Details({ entry: e, targetName }: { entry: LiveEntry; targetName: (id: 
           <div className="flex flex-wrap gap-1.5">
             {agents.map(([a, n]) => (
               <span key={a} className="chip">
-                {agentName(a)} {formatNumber(n)}
+                <AgentName slug={a} /> {formatNumber(n)}
               </span>
             ))}
           </div>

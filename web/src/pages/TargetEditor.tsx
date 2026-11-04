@@ -19,7 +19,9 @@ import {
 import { KNOWN_AGENT_SLUGS, agentName } from "../agents"
 import { useRouterData } from "../App"
 import { JsonViewer } from "../json"
-import { ErrorBanner, Modal, Toggle } from "../ui"
+import { AgentName, ErrorBanner, Modal, Toggle } from "../ui"
+
+const ALL_AGENTS = "*"
 
 export function newTarget(type: TargetType): Target {
   const base: Target = {
@@ -287,23 +289,28 @@ export default function TargetEditor({ initial, onClose }: { initial: Target; on
             <div>
               <div className="label mt-4">Agents</div>
               <div className="flex flex-wrap gap-1.5">
-                {KNOWN_AGENT_SLUGS.map((a) => {
-                  const on = (t.agents ?? []).includes(a)
+                {[ALL_AGENTS, ...KNOWN_AGENT_SLUGS].map((a) => {
+                  const all = a === ALL_AGENTS
+                  const selected = t.agents ?? []
+                  const on = all ? selected.length === 0 : selected.includes(a)
+                  const next = all ? [] : on ? selected.filter((x) => x !== a) : [...selected, a]
                   return (
                     <button
                       key={a}
-                      onClick={() => patch({ agents: on ? t.agents!.filter((x) => x !== a) : [...(t.agents ?? []), a] })}
+                      onClick={() => patch({ agents: next.length ? next : undefined })}
                       className={`rounded-full border px-2.5 py-1 text-xs transition ${
                         on ? "border-primary/60 bg-primary/15 text-primary" : "border-line text-muted hover:border-line-strong"
                       }`}
                     >
-                      {agentName(a)}
+                      {all ? "All agents" : <AgentName slug={a} />}
                     </button>
                   )
                 })}
               </div>
               <p className="mt-2 text-xs text-faint">
-                {(t.agents ?? []).length === 0 ? "All agents are sent. Pick some to send only those." : "Only the selected agents are sent."}
+                {(t.agents ?? []).length === 0
+                  ? "Every agent is sent, including ones not listed here. Pick some to send only those."
+                  : "Only the selected agents are sent."}
               </p>
             </div>
           </Section>
@@ -549,6 +556,7 @@ function FilterControls({ rules, onChange }: { rules: Rule[]; onChange: (r: Rule
 
 const EFFECTS = [
   "Log events dropped",
+  "Log bodies emptied",
   "Records dropped",
   "Spans dropped",
   "Metrics dropped",
@@ -596,6 +604,7 @@ function effectsOf(rules: Rule[], known: KnownCategory[], secrets: { id: string;
               continue
             }
             add("Log events dropped", rm.events, from)
+            add("Log bodies emptied", rm.bodies, from)
             add("Records dropped", rm.rules, from)
             add("Metrics dropped", rm.metrics, from)
             add("Attributes dropped", rm.attributes, from)

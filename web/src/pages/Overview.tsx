@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 import { ArrowRight, Inbox } from "lucide-react"
 import { SIGNALS, formatNumber, timeAgo, type Signal, type Stats, type Target, type TargetStats } from "../api"
-import { agentName } from "../agents"
 import { useRouterData } from "../App"
-import { PageHeader, StatusDot, type Health } from "../ui"
+import { AgentName, PageHeader, StatusDot, type Health } from "../ui"
 
 export function targetHealth(t: Target, s?: TargetStats): Health {
   if (!t.enabled) return "off"
@@ -119,7 +118,9 @@ export default function Overview() {
               {agents.map((a) => (
                 <div key={a.agent} className="flex items-center justify-between rounded-lg bg-well px-3 py-2.5">
                   <div>
-                    <div className="text-sm font-medium">{agentName(a.agent)}</div>
+                    <div className="text-sm font-medium">
+                      <AgentName slug={a.agent} />
+                    </div>
                     <div className="text-xs text-faint">{timeAgo(a.lastSeenAt)}</div>
                   </div>
                   <div className="flex gap-1.5">

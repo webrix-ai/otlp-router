@@ -105,6 +105,52 @@ func TestDropKnownSharedProfiles(t *testing.T) {
 	}
 }
 
+// willowAgentLogs mirrors what the Willow agent sends for Cursor and Pi: the
+// prompt as the body of a user_prompt record, metadata in attributes.
+func willowAgentLogs(service string) (telemetry.Payload, plog.ScopeLogs) {
+	ld := plog.NewLogs()
+	sl := agentLogs(ld, service)
+	prompt := sl.LogRecords().AppendEmpty()
+	prompt.SetEventName("user_prompt")
+	prompt.Body().SetStr("fix the build")
+	prompt.Attributes().PutStr("session.id", "s-1")
+	result := sl.LogRecords().AppendEmpty()
+	result.SetEventName("tool_result")
+	result.Attributes().PutStr("tool_name", "bash")
+	result.Attributes().PutStr("willow.detect.tool_input", `{"command":"gh pr view 1"}`)
+	return telemetry.FromLogs(ld), sl
+}
+
+func TestDropKnownPromptsClearsWillowAgentBodies(t *testing.T) {
+	for _, service := range []string{"cursor", "pi"} {
+		p, sl := willowAgentLogs(service)
+
+		known(t, p, Prompts)
+
+		if p.Items() != 2 {
+			t.Fatalf("%s: the prompt event should be kept, got %d records", service, p.Items())
+		}
+		lr := sl.LogRecords().At(0)
+		if lr.Body().Type() != pcommon.ValueTypeEmpty || !has(lr, "session.id") {
+			t.Fatalf("%s: want the prompt body emptied and attributes kept, got body %q", service, lr.Body().AsString())
+		}
+	}
+}
+
+func TestDropKnownToolArgumentsWillowAgents(t *testing.T) {
+	p, sl := willowAgentLogs("cursor")
+
+	known(t, p, ToolArguments)
+
+	lr := sl.LogRecords().At(1)
+	if has(lr, "willow.detect.tool_input") || !has(lr, "tool_name") {
+		t.Fatalf("want tool input removed and tool name kept, got %v", lr.Attributes().AsRaw())
+	}
+	if sl.LogRecords().At(0).Body().Str() != "fix the build" {
+		t.Fatal("tool arguments must not touch the prompt")
+	}
+}
+
 func TestDropKnownPromptsUnknownAgentFallsBackToDroppingEvents(t *testing.T) {
 	ld := plog.NewLogs()
 	sl := agentLogs(ld, "my-agent")
@@ -340,7 +386,7 @@ func TestKnownCategoriesListAgents(t *testing.T) {
 		if c.ID != Prompts {
 			continue
 		}
-		for _, a := range []string{"claude-code", "claude-cowork", "codex", "gemini-cli", "qwen-code"} {
+		for _, a := range []string{"claude-code", "claude-cowork", "codex", "gemini-cli", "qwen-code", "cursor", "pi"} {
 			if !slices.Contains(c.Agents, a) {
 				t.Errorf("prompts should list %s, have %v", a, c.Agents)
 			}

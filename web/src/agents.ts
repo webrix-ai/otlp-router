@@ -110,8 +110,18 @@ export const KNOWN_AGENT_SLUGS = [
   "codex",
   "gemini-cli",
   "qwen-code",
-  "github-copilot"
+  "github-copilot",
+  "cursor",
+  "pi"
 ]
+
+// Agents with no OpenTelemetry export of their own: the Willow agent sends
+// their telemetry, so they have no setup snippet.
+export const WILLOW_AGENT_SLUGS = ["cursor", "pi"]
+
+export function isWillowAgent(slug: string): boolean {
+  return WILLOW_AGENT_SLUGS.includes(slug)
+}
 
 const NAMES: Record<string, string> = {
   "claude-code": "Claude Code",
@@ -120,6 +130,8 @@ const NAMES: Record<string, string> = {
   "gemini-cli": "Gemini CLI",
   "qwen-code": "Qwen Code",
   "github-copilot": "GitHub Copilot",
+  cursor: "Cursor",
+  pi: "Pi",
   unknown: "Unknown"
 }
 

@@ -155,6 +155,7 @@ export interface KnownRemoval {
   events?: string[]
   attributes?: string[]
   metrics?: string[]
+  bodies?: string[]
   rules?: string[]
 }
 

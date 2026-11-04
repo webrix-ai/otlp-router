@@ -1,9 +1,8 @@
 import { useState } from "react"
 import { ArrowRight, Filter, Pencil, Plus } from "lucide-react"
 import { api, formatNumber, timeAgo, SIGNALS, willowEndpoint, type Target } from "../api"
-import { agentName } from "../agents"
 import { useRouterData } from "../App"
-import { ErrorBanner, PageHeader, StatusDot, Toggle } from "../ui"
+import { AgentName, ErrorBanner, PageHeader, StatusDot, Toggle } from "../ui"
 import { PodsNotice, targetHealth } from "./Overview"
 import TargetEditor, { newTarget } from "./TargetEditor"
 
@@ -94,7 +93,11 @@ export default function Targets() {
                       {sig}
                     </span>
                   ))}
-                  {(t.agents ?? []).length > 0 && <span className="chip">{t.agents!.map(agentName).join(", ")}</span>}
+                  {t.agents?.map((a) => (
+                    <span key={a} className="chip">
+                      <AgentName slug={a} />
+                    </span>
+                  ))}
                   {(t.filters ?? []).length > 0 && (
                     <span className="chip border-primary/30 text-primary">
                       <Filter className="size-3" /> {t.filters!.length} filter{t.filters!.length > 1 ? "s" : ""}
